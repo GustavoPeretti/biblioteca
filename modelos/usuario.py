@@ -57,7 +57,4 @@ class Usuario(ABC):
             f"CPF: {self.cpf}\n"
             f"-------------------------"
         )
-        
-u1 = Usuario("Ana Silva", "anasilva@gmail.com", "senha123", "123.456.789-00")
-
-print(u1)    
+    
