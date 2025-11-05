@@ -2,9 +2,7 @@ from abc import ABC
 from uuid import uuid4
 
 class Usuario(ABC):
-    
     def __init__(self, nome, email, senha, cpf):
-        
         self._id = uuid4()
         self._nome = nome
         self._email = email
