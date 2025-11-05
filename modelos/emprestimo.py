@@ -47,6 +47,13 @@ class Emprestimo:
     def multa(self):
         return self._multa
 
+    @property
+    def data_prevista_devolucao(self):
+        '''Data limite para devolução do item ou renovação do empréstimo'''
+
+        # data do empréstimo + acréscimos das renovações (incluindo a que será realizada, o que justifica o '+ 1')
+        return self._data_emprestimo + datetime.timedelta(days=(self._quantidade_renovacoes + 1) * PRAZO_DEVOLUCAO)
+
     @classmethod
     def de_reserva(cls, reserva):
         '''Cria uma empréstimo a partir de uma reserva'''
@@ -59,27 +66,28 @@ class Emprestimo:
         if self._status != 'ativo':
             raise ValueError('Empréstimo já finalizado')
 
-        # Data da última atualização: data do empréstimo + acréscimos das renovações feitas até o momento
-        ultima_atualizacao = self._data_emprestimo + datetime.timedelta(days=self._quantidade_renovacoes * PRAZO_DEVOLUCAO)
+        # Quanto tempo passou desde a data de devolução
+        tempo_diferenca = datetime.datetime.now() - self.data_prevista_devolucao
 
-        # Quantos dias passaram desde a última renovação ou o empréstimo
-        tempo_diferenca = datetime.datetime.now() - ultima_atualizacao
-
-        if tempo_diferenca > datetime.timedelta(days=PRAZO_DEVOLUCAO):
+        # Se o tempo de diferença é negativo (está atrasado)
+        if tempo_diferenca < datetime.timedelta(0):
             self._status = 'multado'
-            self._multa = Multa(MULTA_POR_DIA * tempo_diferenca.days, False)
+            self._multa = Multa(MULTA_POR_DIA * abs(tempo_diferenca.days), False)
             return
         
         self._status = 'finalizado'
 
     def quitar_divida(self):
+        # Se não há registro de multas
         if self._status != 'multado':
             raise ValueError('Não há multas para quitar')
         
+        # Atualização do estado da multa
         self._multa.paga = True
         self._status = 'finalizado'
 
-        self.data_quitacao = datetime.datetime.now()
+        # Registro da data de quitação
+        self._data_quitacao = datetime.datetime.now()
 
     def renovar(self):
         '''Incrementa o número de renovações quando um membro ou um bibliotecário renova um empréstimo no sistema'''
@@ -92,19 +100,17 @@ class Emprestimo:
         if self._quantidade_renovacoes >= LIMITE_RENOVACOES:
             raise ValueError(f'Não é possível um empréstimo mais de {LIMITE_RENOVACOES}')
 
-        # Observação: cada renovação estende o prazo de devolução em PRAZO_DEVOLUCAO dias
-
-        # Data prevista para renovação: data do empréstimo + acréscimos das renovações (incluindo a que será realizada, o que justifica o '+ 1')
-        data_prevista_renovacao = self._data_emprestimo + datetime.timedelta(days=(self._quantidade_renovacoes + 1) * PRAZO_DEVOLUCAO)
         # Data mínima para a permissão da renovação: dois dias antes da data prevista
-        data_minima = data_prevista_renovacao - datetime.timedelta(days=2)
+        data_minima = self.data_prevista_devolucao - datetime.timedelta(days=2)
+
+        data_atual = datetime.datetime.now()
 
         # Se ainda não chegou a data mínima
-        if datetime.datetime.now() < data_minima:
+        if data_atual < data_minima:
             raise ValueError(f'É preciso esperar até {data_minima.strftime("%d/%m/%Y, %H:%M:%S")} para renovar')
 
         # Se já passou da data prevista, há atrasos 
-        if datetime.datetime.now() > data_prevista_renovacao:
+        if data_atual > self.data_prevista_devolucao:
             raise ValueError(f'Um item atrasado não pode ser renovado, e sim devolvido')
 
         # Incrementa a quantidade de renovações
