@@ -1,7 +1,7 @@
 class Multa:
     def __init__(self, valor, paga):
         self._valor = valor
-        self._paga = paga 
+        self._paga = paga
         
     @property
     def valor(self):
@@ -18,5 +18,3 @@ class Multa:
     @valor.setter
     def valor(self, novo_valor):
         self._valor = novo_valor
-    
-    
