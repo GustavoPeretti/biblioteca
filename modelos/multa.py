@@ -1,5 +1,4 @@
 class Multa:
-    
     def __init__(self, valor, paga):
         self._valor = valor
         self._paga = paga 
@@ -13,7 +12,7 @@ class Multa:
         return self._paga
     
     @paga.setter
-    def paga(self, status): #True ou False
+    def paga(self, status):
         self._paga = status
     
     @valor.setter
