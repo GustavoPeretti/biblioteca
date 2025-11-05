@@ -22,51 +22,69 @@ class Biblioteca:
         self.usuarios.append(classe_tipo(nome, email, senha, cpf))
         
     def remover_usuario(self, id):
+        # Filtro de usuários por ID
         usuarios = [u for u in self.usuarios if u.id == id]
 
+        # Se o filtro não resultar em nenhum usuário
         if not usuarios:
             raise ValueError(f'Usuário com id {id} não existe')
         
+        # Considerar o único resultado do filtro
         usuario = usuarios[0]
 
+        # Remover instância da lista
         self.usuarios.remove(usuario)
 
     def adicionar_item(self, item):
         self.itens.append(item)
 
     def remover_item(self, id):
+        # Filtro de itens por ID
         itens = [i for i in self.itens if i.id == id]
 
+        # Se o filtro não resultar em nenhum item
         if not itens:
             raise ValueError(f'Item com id {id} não existe')
         
+        # Considerar o único resultado do filtro
         item = itens[0]
 
+        # Remover instância da lista
         self.itens.remove(item)
     
     def emprestar_item(self, item, membro):
+        # Se o usuário não for um membro (apenas membros podem emprestar e reservar)
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem emprestar itens')
         
+        # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
-            [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] + [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro]
+            [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] # Filtro para encontrar empréstimos ativos do membro
+            +
+            [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro] # Filtro para encontrar reservas ativas do membro
         )
 
+        # Se ultrapasasar o limite de empréstimos
         if soma_emprestimos_reservas >= LIMITE_EMPRESTIMOS_SIMULTANEOS:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
 
+        # Criar o empréstimo
         self.itens.emprestimos.append(Emprestimo(item, membro))
         
     def reservar_item(self, item, membro):
+        # Se o usuário não for um membro (apenas membros podem emprestar e reservar)
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem reservar itens')
         
+        # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
             [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] + [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro]
         )
 
+        # Se ultrapasasar o limite de empréstimos
         if soma_emprestimos_reservas >= LIMITE_EMPRESTIMOS_SIMULTANEOS:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
         
+        # Criar a reserva
         self.itens.reservas.append(Reserva(item, membro))
         
