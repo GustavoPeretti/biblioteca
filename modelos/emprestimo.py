@@ -86,6 +86,6 @@ class Emprestimo:
         data_minima = data_renovacao - datetime.timedelta(days=2)
 
         if datetime.datetime.now() < data_minima:
-            raise ValueError(f'É preciso esperar o dia {data_minima.strftime("%d/%m/%Y, %H:%M:%S")} para renovar')
+            raise ValueError(f'É preciso esperar até {data_minima.strftime("%d/%m/%Y, %H:%M:%S")} para renovar')
 
         self._quantidade_renovacoes += 1

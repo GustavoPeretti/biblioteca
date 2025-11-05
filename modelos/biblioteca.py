@@ -48,15 +48,25 @@ class Biblioteca:
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem emprestar itens')
         
-        # soma_emprestimos_reservas = len(
-        #     [e for e in self.emprestimos if e.status == 'ativo'] + []
-        # s)
+        soma_emprestimos_reservas = len(
+            [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] + [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro]
+        )
+
+        if soma_emprestimos_reservas >= LIMITE_EMPRESTIMOS_SIMULTANEOS:
+            raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
 
         self.itens.emprestimos.append(Emprestimo(item, membro))
         
     def reservar_item(self, item, membro):
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem reservar itens')
+        
+        soma_emprestimos_reservas = len(
+            [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] + [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro]
+        )
+
+        if soma_emprestimos_reservas >= LIMITE_EMPRESTIMOS_SIMULTANEOS:
+            raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
         
         self.itens.reservas.append(Reserva(item, membro))
         
