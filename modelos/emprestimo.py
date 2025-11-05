@@ -1,7 +1,7 @@
 from uuid import uuid4
 import datetime
 from multa import Multa
-from config import PRAZO_DEVOLUCAO, MULTA_POR_DIA
+from config import PRAZO_DEVOLUCAO, MULTA_POR_DIA, LIMITE_RENOVACOES, LIMITE_EMPRESTIMOS_SIMULTANEOS
 
 class Emprestimo:
     def __init__(self, item, membro):
@@ -9,6 +9,7 @@ class Emprestimo:
         self._data_emprestimo = datetime.datetime.now()
         self._data_devolucao = None
         self._data_quitacao = None
+        self._quantidade_renovacoes = 0
         self._status = 'ativo' # 'ativo', 'multado', 'finalizado'
         self._item = item
         self._membro = membro
@@ -54,7 +55,9 @@ class Emprestimo:
         if self._status != 'ativo':
             raise ValueError('Empréstimo já finalizado')
 
-        tempo_diferenca = (datetime.datetime.now() - self._data_emprestimo) # Quantos dias passaram desde o empréstimo
+        ultima_renovacao = self._data_emprestimo + datetime.timedelta(days=self._quantidade_renovacoes * PRAZO_DEVOLUCAO)
+
+        tempo_diferenca = (datetime.datetime.now() - ultima_renovacao) # Quantos dias passaram desde a última renovação ou o empréstimo
 
         if tempo_diferenca > datetime.timedelta(days=PRAZO_DEVOLUCAO):
             self._status = 'multado'
@@ -71,3 +74,18 @@ class Emprestimo:
         self._status = 'finalizado'
 
         self.data_quitacao = datetime.datetime.now()
+
+    def renovar(self):
+        if self._status != 'ativo':
+            raise ValueError('Não é possível renovar um empréstimo finalizado')
+
+        if self._quantidade_renovacoes == LIMITE_RENOVACOES:
+            raise ValueError(f'Não é possível um empréstimo mais de {LIMITE_RENOVACOES}')
+
+        data_renovacao = self._data_emprestimo + datetime.timedelta(days=(self._quantidade_renovacoes + 1) * PRAZO_DEVOLUCAO)
+        data_minima = data_renovacao - datetime.timedelta(days=2)
+
+        if datetime.datetime.now() < data_minima:
+            raise ValueError(f'É preciso esperar o dia {data_minima.strftime("%d/%m/%Y, %H:%M:%S")} para renovar')
+
+        self._quantidade_renovacoes += 1
