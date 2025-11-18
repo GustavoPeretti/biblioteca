@@ -1,15 +1,22 @@
+import os
+import sys
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import unicodedata
 import re
 
-from modelos.biblioteca import Biblioteca
-from modelos.livro import Livro
-from modelos.ebook import Ebook
-from modelos.emprestimo import Emprestimo
-from modelos.multa import Multa
+
+# tornar o pacote `modelos` importável quando executado a partir da raiz do projeto
+# (o arquivo `modelos` está em ../modelos relativo a esta pasta `interface`).
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'modelos')))
+
+from biblioteca import Biblioteca
+from livro import Livro
+from ebook import Ebook
+from emprestimo import Emprestimo
+from multa import Multa
 from config import MULTA_POR_DIA
-from modelos.membro import Membro
+from membro import Membro
 
 
 class App(tk.Tk):
