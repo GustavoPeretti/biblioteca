@@ -89,7 +89,10 @@ class Biblioteca:
         pass
 
     def reservar_item(self, item, membro):
-        # TODO: itens disponíveis não podem ser reservados
+        # Itens disponíveis não podem ser reservados
+        emprestimos_ativos_item = [e for e in self.emprestimos if e.status == 'ativo' and e.item == item]
+        if not emprestimos_ativos_item:
+            raise ValueError('Item disponível não pode ser reservado')
 
         # Verificar se o usuário já não tem reserva ativa desse item
         reservas_ativas_membro_item = [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro and r.item == item]
@@ -114,9 +117,37 @@ class Biblioteca:
         self.reservas.append(Reserva(item, membro))
 
     def registrar_pagamento_multa(self, id_emprestimo):
-        pass
+        # Localiza empréstimo pelo id
+        emprestimos = [e for e in self.emprestimos if str(e.id) == str(id_emprestimo) or e.id == id_emprestimo]
+        if not emprestimos:
+            raise ValueError(f'Empréstimo com id {id_emprestimo} não encontrado')
+
+        emprestimo = emprestimos[0]
+
+        # Delegar a lógica de quitação ao próprio objeto Emprestimo
+        emprestimo.quitar_divida()
+
+        return emprestimo
 
     def registrar_devolucao(self, id_emprestimo):
-        pass
+        # Localiza empréstimo pelo id
+        emprestimos = [e for e in self.emprestimos if str(e.id) == str(id_emprestimo) or e.id == id_emprestimo]
+        if not emprestimos:
+            raise ValueError(f'Empréstimo com id {id_emprestimo} não encontrado')
+
+        emprestimo = emprestimos[0]
+
+        # Processa a devolução (pode gerar multa internamente)
+        emprestimo.devolver()
+
+        # Se a devolução finalizou o empréstimo, verificar reservas e liberar para o primeiro da fila
+        if emprestimo.status == 'finalizado':
+            reservas_ativas_item = [r for r in self.reservas if r.status == 'aguardando' and r.item == emprestimo.item]
+            if reservas_ativas_item:
+                reservas_ativas_item.sort(key=lambda r: r.data_reserva)
+                primeira = reservas_ativas_item[0]
+                primeira.marcar_como_finalizada()
+
+        return emprestimo
 
     
