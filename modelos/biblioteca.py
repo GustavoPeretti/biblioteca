@@ -144,7 +144,6 @@ class Biblioteca:
         emprestimo.renovar()
         
         return emprestimo
-        
 
     def reservar_item(self, item, membro):
         # Itens disponíveis não podem ser reservados
