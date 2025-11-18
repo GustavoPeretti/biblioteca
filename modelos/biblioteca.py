@@ -85,8 +85,22 @@ class Biblioteca:
         # Criar o empréstimo
         self.emprestimos.append(Emprestimo(item, membro))
         
-    def renovar_emprestimo(self, id_item):
-        pass
+    def renovar_emprestimo(self, id_emprestimo):
+        # Localiza empréstimo pelo id
+        emprestimos = [e for e in self.emprestimos if str(e.id) == str(id_emprestimo) or e.id == id_emprestimo]
+        
+        # Se o empréstimo não foi encontrado
+        if not emprestimos:
+            raise ValueError(f'Empréstimo com id {id_emprestimo} não encontrado')
+        
+        # Considera o único resultado do filtro
+        emprestimo = emprestimos[0]
+        
+        # Delega a lógica de renovação ao próprio objeto Emprestimo
+        emprestimo.renovar()
+        
+        return emprestimo
+        
 
     def reservar_item(self, item, membro):
         # Itens disponíveis não podem ser reservados
