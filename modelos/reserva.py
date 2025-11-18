@@ -7,7 +7,7 @@ class Reserva:
         self._data_reserva = datetime.datetime.now()
         self._data_cancelamento = None
         self._data_finalizacao = None
-        self._status = 'aguardando' # 'aguardando', 'cancelada' ou 'finalizada'
+        self._status = 'aguardando' # 'aguardando', 'cancelada', 'expirada' ou 'finalizada'
         self._item = item
         self._membro = membro
 
