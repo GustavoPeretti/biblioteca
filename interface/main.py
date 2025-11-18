@@ -5,7 +5,8 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 import unicodedata
 import re
 
-# Ajuste do path para importar módulos que usam import sem pacote
+
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'modelos'))
 
 from biblioteca import Biblioteca
@@ -27,7 +28,7 @@ class App(tk.Tk):
         super().__init__()
         self.title('Biblioteca - GUI')
         self.geometry('1000x600')
-        # Fonte e estilo base - usar tupla para evitar parsing incorreto do Tk
+     
         try:
             self.option_add('*Font', ('Segoe UI', 10))
         except Exception:
@@ -38,31 +39,27 @@ class App(tk.Tk):
 
         self.library = Biblioteca()
 
-        # dados de exemplo para facilitar testes
         self.library.adicionar_usuario('João', 'joao@example.com', '123', '12345678900', 'membro')
         self.library.adicionar_usuario('Maria', 'maria@example.com', '123', '98765432100', 'bibliotecario')
         self.library.adicionar_item(Livro('Aprendendo Python', '', '', 'Luciano', 300, '111', 'Programação'))
 
-        # mapeamento de objetos para Treeview
         self.items_map = {}
         self.users_map = {}
         self.loans_map = {}
         self.reservations_map = {}
-        # empréstimo pendente iniciado pela aba usuários
         self.pending_loan_member = None
 
         self.create_widgets()
         self.refresh_all()
 
     def setup_style(self):
-        # configura tema e estilos do ttk para um visual mais limpo
+    
         style = ttk.Style(self)
         try:
             style.theme_use('clam')
         except Exception:
             pass
 
-        # Treeview: linha maior e cabeçalho em negrito
         style.configure('Treeview', rowheight=26, font=('Segoe UI', 10), fieldbackground='#FFFFFF')
         style.configure('Treeview.Heading', font=('Segoe UI', 10, 'bold'))
         style.configure('TButton', padding=(6, 3))
@@ -81,6 +78,7 @@ class App(tk.Tk):
 
         notebook.add(self.frame_items, text='Catálogo')
         notebook.add(self.frame_users, text='Usuários')
+
         self.frame_register = ttk.Frame(notebook)
         notebook.add(self.frame_register, text='Registrar Empréstimo')
         notebook.add(self.frame_loans, text='Empréstimos')
@@ -91,14 +89,16 @@ class App(tk.Tk):
         self.build_register_tab()
         self.build_loans_tab()
         self.build_reservations_tab()
+   
         self.setup_style()
-        
+
         self.status_var = tk.StringVar(value='Pronto')
         self.status_label = ttk.Label(self, textvariable=self.status_var, anchor='w', relief='sunken')
         self.status_label.pack(fill='x', side='bottom')
 
     def build_items_tab(self):
         frame = self.frame_items
+  
         search_frame = ttk.Frame(frame)
         search_frame.pack(fill='x', padx=8, pady=4)
 
@@ -108,14 +108,17 @@ class App(tk.Tk):
         self.entry_item_search.bind('<KeyRelease>', lambda e: self.search_items())
         ttk.Button(search_frame, text='Pesquisar', command=self.search_items).pack(side='left', padx=4)
 
+        # treeview
         cols = ('id', 'nome', 'autor', 'isbn', 'categoria', 'paginas', 'emprestavel')
         self.tree_items = ttk.Treeview(frame, columns=cols, show='headings')
         for c in cols:
             self.tree_items.heading(c, text=c.title())
         self.tree_items.pack(fill='both', expand=True, padx=8, pady=4)
+        # detalhes do item selecionado
         self.details_item_label = ttk.Label(frame, text='', anchor='w')
         self.details_item_label.pack(fill='x', padx=8)
 
+        # ações
         action_frame = ttk.Frame(frame)
         action_frame.pack(fill='x', padx=8, pady=4)
         self.btn_add_item = ttk.Button(action_frame, text='Adicionar Item', command=self.add_item_window)
@@ -128,9 +131,10 @@ class App(tk.Tk):
         self.btn_confirm_loan.pack(side='left')
         self.btn_cancel_pending = ttk.Button(action_frame, text='Cancelar Empréstimo', command=self.cancel_pending_loan, state='disabled')
         self.btn_cancel_pending.pack(side='left')
+        
         self.pending_loan_label = ttk.Label(action_frame, text='')
         self.pending_loan_label.pack(side='right', padx=8)
-        
+        # seleção
         self.tree_items.bind('<<TreeviewSelect>>', self.on_item_select)
 
     def build_users_tab(self):
@@ -169,6 +173,7 @@ class App(tk.Tk):
         for c in cols:
             self.tree_loans.heading(c, text=c.title())
         self.tree_loans.pack(fill='both', expand=True, padx=8, pady=4)
+    
         self.tree_loans.tag_configure('multado', background='#ffe6e6')
         self.tree_loans.tag_configure('odd', background='#ffffff')
         self.tree_loans.tag_configure('even', background='#f6f6f6')
@@ -199,6 +204,7 @@ class App(tk.Tk):
         ttk.Button(action_frame, text='Cancelar Reserva', command=self.cancel_reservation).pack(side='left')
         ttk.Button(action_frame, text='Finalizar Reserva', command=self.finish_reservation).pack(side='left')
 
+    # aba Registrar Empréstimo
     def strip_accents(self, s: str) -> str:
         if not s:
             return ''
@@ -207,8 +213,11 @@ class App(tk.Tk):
 
     def build_register_tab(self):
         f = self.frame_register
+
         paned = ttk.PanedWindow(f, orient='horizontal')
         paned.pack(fill='both', expand=True, padx=6, pady=6)
+
+ 
         left = ttk.Frame(paned)
         paned.add(left, weight=1)
         search_u = ttk.Frame(left)
@@ -225,6 +234,7 @@ class App(tk.Tk):
         self.tree_reg_users.pack(fill='both', expand=True, padx=6, pady=4)
         self.tree_reg_users.bind('<<TreeviewSelect>>', self.on_register_user_select)
 
+        # painel catálogo
         right = ttk.Frame(paned)
         paned.add(right, weight=1)
         search_i = ttk.Frame(right)
@@ -241,6 +251,7 @@ class App(tk.Tk):
         self.tree_reg_items.pack(fill='both', expand=True, padx=6, pady=4)
         self.tree_reg_items.bind('<<TreeviewSelect>>', self.on_register_item_select)
 
+        # rodapé com confirmação
         footer = ttk.Frame(f)
         footer.pack(fill='x', padx=6, pady=6)
         self.lbl_reg_selected = ttk.Label(footer, text='Nenhum usuário/item selecionado')
@@ -290,7 +301,7 @@ class App(tk.Tk):
         i_sel = self.tree_reg_items.selection()
         if u_sel and i_sel:
             u = self.library.usuarios[int(u_sel[0]) - 1] if False else None
-        # safer: read from items/users maps by id from trees
+
         user_text = '---'
         item_text = '---'
         if u_sel:
@@ -310,7 +321,7 @@ class App(tk.Tk):
             except Exception:
                 pass
         self.lbl_reg_selected.config(text=f'Usuário: {user_text}  |  Item: {item_text}')
-        # habilitar confirmar somente se ambos selecionados e item emprestavel
+        
         enabled = False
         if u_sel and i_sel:
             uid = u_sel[0]; iid = i_sel[0]
@@ -340,7 +351,7 @@ class App(tk.Tk):
         self.set_status(f'Empréstimo registrado: {user.nome} → {item.nome}', 4000)
         self.refresh_all()
 
-    # ---------- operações leitura/refresh ----------
+    # operações leitura
     def refresh_items(self, filter_text=''):
         for row in self.tree_items.get_children():
             self.tree_items.delete(row)
@@ -376,6 +387,7 @@ class App(tk.Tk):
             iid = str(e.id)
             self.loans_map[iid] = e
             multa = f"{e.multa.valor:.2f}" if e.multa else ''
+            # tags: multado tem prioridade
             tags = []
             if e.status == 'multado':
                 tags.append('multado')
@@ -405,7 +417,6 @@ class App(tk.Tk):
         self.refresh_reservations()
         self.update_pending_loan_ui()
 
-    # ---------- utilitários de UI ----------
     def set_status(self, msg, timeout=3000):
         try:
             self.status_var.set(msg)
@@ -469,7 +480,7 @@ class App(tk.Tk):
             self.btn_imposefine.config(state='disabled')
             return
         e = self.loans_map[sel[0]]
-        # status-driven enabling
+  
         if e.status in ('ativo', 'emprestado'):
             self.btn_renew.config(state='normal')
             self.btn_return.config(state='normal')
@@ -483,7 +494,7 @@ class App(tk.Tk):
         # sempre permitir multar manualmente para ajuste
         self.btn_imposefine.config(state='normal')
 
-    # ---------- ações de formulários ----------
+    # ações de formulários
     def search_items(self):
         self.refresh_items(self.entry_item_search.get())
 
@@ -570,7 +581,7 @@ class App(tk.Tk):
         tk.Label(top, text='Páginas').pack(); en_paginas = ttk.Entry(top); en_paginas.insert(0, obj.num_paginas); en_paginas.pack()
         ttk.Button(top, text='Salvar', command=save).pack()
 
-    # ---------- validação de campos ----------
+    # validação de campos
     def clean_digits(self, s: str) -> str:
         return ''.join(ch for ch in s if ch.isdigit())
 
@@ -616,7 +627,7 @@ class App(tk.Tk):
         self.refresh_items()
         self.set_status('Item removido', 3000)
 
-    # ---------- usuários ----------
+    # usuários
     def search_users(self):
         self.refresh_users(self.entry_user_search.get())
 
