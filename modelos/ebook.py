@@ -6,6 +6,7 @@ class Ebook(Item):
         
         self._arquivo = arquivo
         self._url = url
+        self._emprestavel = False
 
     @property
     def arquivo(self):
