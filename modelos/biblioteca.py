@@ -104,5 +104,6 @@ class Biblioteca:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
         
         # Criar a reserva
-        self.itens.reservas.append(Reserva(item, membro))
+        # OBS: corrigir para adicionar na lista de reservas da biblioteca
+        self.reservas.append(Reserva(item, membro))
         

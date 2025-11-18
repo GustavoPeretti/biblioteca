@@ -29,7 +29,7 @@ class Emprestimo:
     
     @property
     def data_quitacao(self):
-        return self._data_devolucao
+        return self._data_quitacao
     
     @property
     def status(self):
@@ -69,12 +69,17 @@ class Emprestimo:
         # Quanto tempo passou desde a data de devolução
         tempo_diferenca = datetime.datetime.now() - self.data_prevista_devolucao
 
-        # Se o tempo de diferença é negativo (está atrasado)
-        if tempo_diferenca < datetime.timedelta(0):
+        # Se o tempo de diferença é positivo -> atraso (devolução depois do prazo)
+        if tempo_diferenca > datetime.timedelta(0):
             self._status = 'multado'
-            self._multa = Multa(MULTA_POR_DIA * abs(tempo_diferenca.days), False)
+            # calcula multa: multa por dia * número de dias de atraso
+            self._multa = Multa(MULTA_POR_DIA * tempo_diferenca.days, False)
+            # registra data de devolução
+            self._data_devolucao = datetime.datetime.now()
             return
         
+        # registra data de devolução e finaliza
+        self._data_devolucao = datetime.datetime.now()
         self._status = 'finalizado'
 
     def quitar_divida(self):
