@@ -74,7 +74,9 @@ class Biblioteca:
         # Ordenação das reservas ativas por ordem de reserva (as primeiras reservas vêm primeiro)
         reservas_ativas_item.sort(key=lambda r: r.data_reserva)
 
-        # Verificação de expiração de reservas: se houver reservas ativas, o membro deve ser o primeiro na fila
+        # TODO: verificar reservas expiradas, evitando que usuários que reservam e esquecem de retirar "travem" a fila
+        
+        # Se houver reservas ativas, o membro deve ser o primeiro na fila
         if reservas_ativas_item:
             primeiro_membro_fila = reservas_ativas_item[0].membro
             if membro != primeiro_membro_fila:
@@ -84,6 +86,8 @@ class Biblioteca:
         self.emprestimos.append(Emprestimo(item, membro))
         
     def reservar_item(self, item, membro):
+        # TODO: itens disponíveis não podem ser reservados
+
         # Verificar se o usuário já não tem reserva ativa desse item
         reservas_ativas_membro_item = [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro and r.item == item]
         
