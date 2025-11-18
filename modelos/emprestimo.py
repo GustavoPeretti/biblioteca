@@ -1,6 +1,6 @@
 from uuid import uuid4
 import datetime
-from multa import Multa
+from modelos.multa import Multa
 from config import PRAZO_DEVOLUCAO, MULTA_POR_DIA, LIMITE_RENOVACOES
 
 class Emprestimo:

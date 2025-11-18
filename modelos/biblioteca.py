@@ -1,8 +1,8 @@
-from membro import Membro
-from administrador import Administrador
-from bibliotecario import Bibliotecario
-from emprestimo import Emprestimo
-from reserva import Reserva
+from modelos.membro import Membro
+from modelos.administrador import Administrador
+from modelos.bibliotecario import Bibliotecario
+from modelos.emprestimo import Emprestimo
+from modelos.reserva import Reserva
 from config import LIMITE_EMPRESTIMOS_SIMULTANEOS
 
 class Biblioteca:
