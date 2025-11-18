@@ -75,7 +75,7 @@ class Biblioteca:
         reservas_ativas_item.sort(key=lambda r: r.data_reserva)
 
         # TODO: verificar reservas expiradas, evitando que usuários que reservam e esquecem de retirar "travem" a fila
-        
+
         # Se houver reservas ativas, o membro deve ser o primeiro na fila
         if reservas_ativas_item:
             primeiro_membro_fila = reservas_ativas_item[0].membro
@@ -85,6 +85,9 @@ class Biblioteca:
         # Criar o empréstimo
         self.emprestimos.append(Emprestimo(item, membro))
         
+    def renovar_emprestimo(self, id_item):
+        pass
+
     def reservar_item(self, item, membro):
         # TODO: itens disponíveis não podem ser reservados
 
@@ -108,6 +111,12 @@ class Biblioteca:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
         
         # Criar a reserva
-        # OBS: corrigir para adicionar na lista de reservas da biblioteca
         self.reservas.append(Reserva(item, membro))
-        
+
+    def registrar_pagamento_multa(self, id_emprestimo):
+        pass
+
+    def registrar_devolucao(self, id_emprestimo):
+        pass
+
+    
