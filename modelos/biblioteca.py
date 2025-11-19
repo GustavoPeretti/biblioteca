@@ -70,7 +70,7 @@ class Biblioteca:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
 
         # Obtenção dos empréstimos ativos do item
-        emprestimos_ativos_item = [e for e in self.emprestimos if e.status == 'ativo']
+        emprestimos_ativos_item = [e for e in self.emprestimos if e.status == 'ativo' and e.item == item]
 
         # Se há um empréstimo ativo do item, ele não pode ser emprestado
         if emprestimos_ativos_item:
@@ -78,7 +78,7 @@ class Biblioteca:
         
         # Obtenção do último empréstimo
         # Pode ser que não tenha nenhum resultado, um, ou múltiplos
-        filtro_ultimo_emprestimo = [e for e in self.emprestimos if e.status != 'ativo'] 
+        filtro_ultimo_emprestimo = [e for e in self.emprestimos if e.status != 'ativo' and e.item == e.item] 
         
         # Se nunca teve empréstimos, nunca teve reserva. Isso significa que temos informações
         # suficientes para saber que o livro pode ser emprestado
