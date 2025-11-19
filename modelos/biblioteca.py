@@ -87,7 +87,7 @@ class Biblioteca:
             return
 
         # Ordenação e reversão para garantir que o primeiro elemento da lista seja o empŕestimo mais recente
-        filtro_ultimo_emprestimo.sort(key=lambda e: e.data_devolucao).reverse()
+        filtro_ultimo_emprestimo.sort(key=lambda e: e.data_devolucao, reverse=True)
 
         # O empréstimo mais recente é o primeiro elemento da lista
         emprestimo_mais_recente = filtro_ultimo_emprestimo[0]
