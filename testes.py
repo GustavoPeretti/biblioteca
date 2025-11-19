@@ -423,7 +423,7 @@ def testes_fila_reserva():
     bib.registrar_devolucao(emprestimo.id)
     
     try:
-        bib.emprestar_item(livro, membro2)
+        bib.emprestar_item(livro, membro3)
         teste_assert(len(bib.emprestimos) == 2, "Primeiro da fila consegue emprestar")
     except Exception as e:
         teste_falhou("Primeiro da fila consegue emprestar", str(e))

@@ -57,6 +57,9 @@ class Emprestimo:
     @classmethod
     def de_reserva(cls, reserva):
         '''Cria uma empréstimo a partir de uma reserva'''
+        
+        reserva.marcar_como_finalizada()
+
         return cls(reserva.item, reserva.membro)
     
     def devolver(self):

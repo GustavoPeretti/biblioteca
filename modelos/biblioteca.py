@@ -107,7 +107,7 @@ class Biblioteca:
                 reserva.status = 'expirada'
 
         # Obtenção das reservas "honestas", com prioridade para retirar
-        reservas_ativas_item = [r for r in self.reservas if r.status == 'aguardando' and r.item == item]
+        reservas_ativas_item = [r for r in reservas_ativas_item if r.status == 'aguardando']
 
         # Se não há reservas ativas, não há prioridade para verificar
         if not reservas_ativas_item:
