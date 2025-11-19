@@ -69,22 +69,63 @@ class Biblioteca:
         if soma_emprestimos_reservas >= LIMITE_EMPRESTIMOS_SIMULTANEOS:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
 
-        # Filtro para encontrar reservas ativas do item (considera reservas aguardando e as finalizadas com prioridade)
-        reservas_ativas_item = [r for r in self.reservas if r.status in ('aguardando', 'finalizada') and r.item == item]
+        # Obtenção dos empréstimos ativos do item
+        emprestimos_ativos_item = [e for e in self.emprestimos if e.status == 'ativo']
+
+        # Se há um empréstimo ativo do item, ele não pode ser emprestado
+        if emprestimos_ativos_item:
+            raise ValueError('Não é possível emprestar um livro com empréstimo ativo')
+        
+        # Obtenção do último empréstimo
+        # Pode ser que não tenha nenhum resultado, um, ou múltiplos
+        filtro_ultimo_emprestimo = [e for e in self.emprestimos if e.status != 'ativo'] 
+        
+        # Se nunca teve empréstimos, nunca teve reserva. Isso significa que temos informações
+        # suficientes para saber que o livro pode ser emprestado
+        if not filtro_ultimo_emprestimo:
+            self.emprestimos.append(Emprestimo(item, membro))
+            return
+
+        # Ordenação e reversão para garantir que o primeiro elemento da lista seja o empŕestimo mais recente
+        filtro_ultimo_emprestimo.sort(key=lambda e: e.data_devolucao).reverse()
+
+        # O empréstimo mais recente é o primeiro elemento da lista
+        emprestimo_mais_recente = filtro_ultimo_emprestimo[0]
+
+        # Data que o item ficou disponível
+        data_referencia = emprestimo_mais_recente.data_devolucao
+
+        # Filtro para encontrar reservas ativas do item
+        reservas_ativas_item = [r for r in self.reservas if r.status == 'aguardando' and r.item == item]
+        
+        # Atualização do status das reservas expiradas
+        for reserva in reservas_ativas_item:
+            data_validade_reserva = data_referencia + datetime.timedelta(days=PRAZO_VALIDADE_RESERVA)
+
+            # Se passou da data de validade
+            if datetime.datetime.now() > data_validade_reserva:
+                reserva.status = 'expirada'
+
+        # Obtenção das reservas "honestas", com prioridade para retirar
+        reservas_ativas_item = [r for r in self.reservas if r.status == 'aguardando' and r.item == item]
+
+        # Se não há reservas ativas, não há prioridade para verificar
+        if not reservas_ativas_item:
+            self.emprestimos.append(Emprestimo(item, membro))
+            return
 
         # Ordenação das reservas ativas por ordem de reserva (as primeiras reservas vêm primeiro)
         reservas_ativas_item.sort(key=lambda r: r.data_reserva)
 
-        # TODO: verificar reservas expiradas, evitando que usuários que reservam e esquecem de retirar "travem" a fila
+        # Membro com preferência para retirar
+        primeiro_membro_fila = reservas_ativas_item[0].membro    
 
-        # Se houver reservas ativas, o membro deve ser o primeiro na fila
-        if reservas_ativas_item:
-            primeiro_membro_fila = reservas_ativas_item[0].membro
-            if membro != primeiro_membro_fila:
-                raise ValueError('Este item possui reservas. Apenas o primeiro membro da fila pode emprestar.')
+        # Se o membro tentando retirar não tem prioridade, ele não pode retirar
+        if membro != primeiro_membro_fila:
+            raise ValueError('Este item possui reservas. Apenas o primeiro membro da fila pode emprestar.')
 
         # Criar o empréstimo
-        self.emprestimos.append(Emprestimo(item, membro))
+        self.emprestimos.append(Emprestimo.de_reserva(reservas_ativas_item[0]))
         
     def renovar_emprestimo(self, id_emprestimo):
         # Localiza empréstimo pelo id
@@ -101,7 +142,6 @@ class Biblioteca:
         emprestimo.renovar()
         
         return emprestimo
-
 
     def reservar_item(self, item, membro):
         # Itens disponíveis não podem ser reservados
