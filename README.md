@@ -71,6 +71,8 @@ python .\run.py
 
 **⚠️ IMPORTANTE:** No Linux, é necessário instalar o Tkinter primeiro!
 
+Veja o guia completo de instalação: **[README_LINUX.md](README_LINUX.md)**
+
 Resumo rápido:
 ```bash
 # Ubuntu/Debian
