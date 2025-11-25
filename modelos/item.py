@@ -90,3 +90,8 @@ class Item(ABC):
     @abstractmethod
     def __str__(self):
         pass
+
+    def __eq__(self, other):
+        if not isinstance(other, Item):
+            return False
+        return str(self.id) == str(other.id)
