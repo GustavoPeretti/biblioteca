@@ -17,7 +17,6 @@ from database.repositories import (
     EmprestimoRepository,
     ReservaRepository
 )
-import sqlite3
 
 
 def inicializar_banco():
@@ -28,9 +27,6 @@ def inicializar_banco():
     
     print("🗄️  Inicializando banco de dados...")
     print(f"📁 Caminho: {db_path}")
-    
-    # Detectar se o arquivo do banco já existia antes — se não, trata-se de criação nova
-    db_existed = db_path.exists()
     
     # Criar gerenciador do banco
     db = DatabaseManager(str(db_path))
@@ -43,88 +39,77 @@ def inicializar_banco():
     # Criar repositories
     usuario_repo = UsuarioRepository(db)
     item_repo = ItemRepository(db)
-
-    # Garantir que apenas os 3 usuários desejados existam no banco.
-    # Esta operação remove quaisquer outros usuários existentes (e, devido a
-    # FOREIGN KEY ... ON DELETE CASCADE, também remove empréstimos/reservas vinculados).
-    # Foi decidido explicitamente manter esse comportamento para garantir que o banco
-    # inicial seja sempre populado com apenas as contas de teste especificadas.
-    try:
-        print("\n🧹 Normalizando usuários: removendo usuários existentes e criando usuários padrão...")
-        # Remover todos os usuários (cascata para registros dependentes)
-        db.execute_query("DELETE FROM usuarios")
-        db.commit()
-
-        # Inserir os três usuários desejados
-        admin_id = usuario_repo.criar(
-            nome="Admin",
-            email="admin@biblioteca.com",
-            senha="admin123",
-            cpf="000.000.000-00",
-            tipo="administrador"
-        )
-        print(f"    ✓ Administrador criado (ID: {admin_id})")
-
-        bib_id = usuario_repo.criar(
-            nome="Maria",
-            email="maria@biblioteca.com",
-            senha="biblio123",
-            cpf="111.111.111-11",
-            tipo="bibliotecario"
-        )
-        print(f"    ✓ Bibliotecário criado (ID: {bib_id})")
-
-        membro_id = usuario_repo.criar(
-            nome="João",
-            email="joao@email.com",
-            senha="senha123",
-            cpf="222.222.222-22",
-            tipo="membro"
-        )
-        print(f"    ✓ Membro criado (ID: {membro_id})")
-
-    except Exception as e:
-        print(f"Aviso: falha ao normalizar/ inserir usuários de teste: {e}")
-    # Inserir itens de exemplo (ignorar duplicações de ISBN)
-    try:
-        item1_id = item_repo.criar(
-            tipo="livro",
-            nome="O Senhor dos Anéis",
-            autor="J.R.R. Tolkien",
-            num_paginas=1200,
-            isbn="978-8533613379",
-            categoria="Fantasia"
-        )
-        print(f"    ✓ Livro criado: O Senhor dos Anéis (ID: {item1_id})")
-    except sqlite3.IntegrityError:
-        print("    ⚠️  Livro 'O Senhor dos Anéis' já existe (ISBN duplicado). Ignorando.")
-
-    try:
-        item2_id = item_repo.criar(
-            tipo="livro",
-            nome="1984",
-            autor="George Orwell",
-            num_paginas=416,
-            isbn="978-8535914849",
-            categoria="Ficção Científica"
-        )
-        print(f"    ✓ Livro criado: 1984 (ID: {item2_id})")
-    except sqlite3.IntegrityError:
-        print("    ⚠️  Livro '1984' já existe (ISBN duplicado). Ignorando.")
-
-    try:
-        item3_id = item_repo.criar(
-            tipo="ebook",
-            nome="Clean Code",
-            autor="Robert C. Martin",
-            num_paginas=464,
-            isbn="978-0132350884",
-            categoria="Tecnologia",
-            url="https://exemplo.com/clean-code.pdf"
-        )
-        print(f"    ✓ Ebook criado: Clean Code (ID: {item3_id})")
-    except sqlite3.IntegrityError:
-        print("    ⚠️  Ebook 'Clean Code' já existe (ISBN duplicado). Ignorando.")
+    
+    # Verificar se já existem dados
+    usuarios = usuario_repo.listar_todos()
+    if usuarios:
+        print("⚠️  Banco de dados já contém dados. Pulando inserção de dados de exemplo.")
+        db.close()
+        return
+    
+    print("\n📝 Populando dados de exemplo...")
+    
+    # Inserir usuários padrão
+    print("  👤 Criando usuários...")
+    admin_id = usuario_repo.criar(
+        nome="Admin Sistema",
+        email="admin@biblioteca.com",
+        senha="admin123",
+        cpf="000.000.000-00",
+        tipo="administrador"
+    )
+    print(f"    ✓ Administrador criado (ID: {admin_id})")
+    
+    bib_id = usuario_repo.criar(
+        nome="Maria Silva",
+        email="maria@biblioteca.com",
+        senha="biblio123",
+        cpf="111.111.111-11",
+        tipo="bibliotecario"
+    )
+    print(f"    ✓ Bibliotecário criado (ID: {bib_id})")
+    
+    membro_id = usuario_repo.criar(
+        nome="João Santos",
+        email="joao@email.com",
+        senha="senha123",
+        cpf="222.222.222-22",
+        tipo="membro"
+    )
+    print(f"    ✓ Membro criado (ID: {membro_id})")
+    
+    # Inserir itens de exemplo
+    print("\n  📚 Criando itens do acervo...")
+    item1_id = item_repo.criar(
+        tipo="livro",
+        nome="O Senhor dos Anéis",
+        autor="J.R.R. Tolkien",
+        num_paginas=1200,
+        isbn="978-8533613379",
+        categoria="Fantasia"
+    )
+    print(f"    ✓ Livro criado: O Senhor dos Anéis (ID: {item1_id})")
+    
+    item2_id = item_repo.criar(
+        tipo="livro",
+        nome="1984",
+        autor="George Orwell",
+        num_paginas=416,
+        isbn="978-8535914849",
+        categoria="Ficção Científica"
+    )
+    print(f"    ✓ Livro criado: 1984 (ID: {item2_id})")
+    
+    item3_id = item_repo.criar(
+        tipo="ebook",
+        nome="Clean Code",
+        autor="Robert C. Martin",
+        num_paginas=464,
+        isbn="978-0132350884",
+        categoria="Tecnologia",
+        url="https://exemplo.com/clean-code.pdf"
+    )
+    print(f"    ✓ Ebook criado: Clean Code (ID: {item3_id})")
     
     # Confirmar mudanças
     db.commit()
