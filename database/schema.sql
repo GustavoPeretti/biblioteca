@@ -113,16 +113,6 @@ CREATE INDEX IF NOT EXISTS idx_multas_paga ON multas(paga);
 -- TABELA: configuracoes
 -- Armazena configurações do sistema
 -- ============================================
-CREATE TABLE IF NOT EXISTS configuracoes (
-    chave TEXT PRIMARY KEY,
-    valor TEXT NOT NULL,
-    descricao TEXT
-);
-
--- Inserir configurações padrão
-INSERT OR IGNORE INTO configuracoes (chave, valor, descricao) VALUES
-    ('prazo_devolucao', '15', 'Prazo em dias para devolução de itens'),
-    ('multa_por_dia', '1', 'Valor da multa por dia de atraso'),
-    ('limite_emprestimos', '15', 'Limite de empréstimos simultâneos por membro'),
-    ('limite_renovacoes', '15', 'Limite de renovações por empréstimo'),
-    ('prazo_validade_reserva', '3', 'Prazo em dias para validade de reserva');
+-- Nota: tabela `configuracoes` removida do schema porque atualmente não há
+-- código que consulte essa tabela em tempo de execução. Se no futuro for
+-- necessária, reintroduza a definição abaixo com os valores padrão.

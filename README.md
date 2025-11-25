@@ -8,7 +8,7 @@ O sistema desenvolvido consiste em um ambiente virtual para gerenciamento de uma
 
 Optou-se pela implementação detalhada de regras de negócio para os processos de uma biblioteca, evitando comportamentos inesperados ao iniciar empréstimos, renovações e devoluções.
 
-Os códigos de verificação de integridade foram documentados com linhas de comentários explicando a lógica utilizada no desenvolvimento. Essa decisão facilita a correção de erros por outros desenvolvedores, mantendo as regras de negócio do sistema evidentes no próprio código. 
+Os códigos de verificação de integridade foram documentados com linhas de comentários explicando a lógica utilizada no desenvolvimento. Essa decisão facilita a correção de erros por outros desenvolvedores, mantendo as regras de negócio do sistema evidentes no próprio código.
 
 ## Funcionamento
 
@@ -24,17 +24,15 @@ O membro é o ator que solicita os empréstimos física ou virtualmente, podendo
 
 ## Implementação
 
-A figura abaixo contém as principais classes projetadas na etapa de design do sistema. 
+A figura abaixo contém as principais classes projetadas na etapa de design do sistema.
 
 ![Alt text](https://raw.githubusercontent.com/GustavoPeretti/biblioteca/refs/heads/main/docs/classes.png "Optional title")
 
-Cada classe foi organizada em um arquivo *python* no diretório *modelos*. As classes abstratas foram configuradas com a herança da classe `abc` e com a marcação dos métodos abstratos com o *decorator* `@abstractmethod`.
+Cada classe foi organizada em um arquivo _python_ no diretório _modelos_. As classes abstratas foram configuradas com a herança da classe `abc` e com a marcação dos métodos abstratos com o _decorator_ `@abstractmethod`.
 
-## Utilização como *library*
+## Utilização como _library_
 
 Essa é uma forma de representar dados de uma biblioteca por meio da classe biblioteca.
-
-
 
 Para utilizar como library basta importar a classe `Biblioteca` e instanciá-la:
 
@@ -61,10 +59,31 @@ Os métodos públicos mais usados na instância de `Biblioteca` são:
 
 ## Utilização com interface gráfica
 
+### Windows
+
 Para executar a interface gráfica, abra o terminal na pasta do projeto e execute:
 
 ```powershell
 python .\run.py
 ```
 
-Em sistemas UNIX você pode usar `python3 run.py` quando necessário.
+### Linux
+
+**⚠️ IMPORTANTE:** No Linux, é necessário instalar o Tkinter primeiro!
+
+Veja o guia completo de instalação: **[README_LINUX.md](README_LINUX.md)**
+
+Resumo rápido:
+```bash
+# Ubuntu/Debian
+sudo apt-get install python3-tk
+
+# Fedora
+sudo dnf install python3-tkinter
+
+# Arch Linux
+sudo pacman -S tk
+
+# Depois execute:
+python3 run.py
+```
