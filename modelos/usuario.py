@@ -55,8 +55,4 @@ class Usuario(ABC):
             f"CPF: {self.cpf}\n"
             f"-------------------------"
         )
-
-    def __eq__(self, other):
-        if not isinstance(other, Usuario):
-            return False
-        return str(self.id) == str(other.id)
+    

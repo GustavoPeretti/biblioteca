@@ -1,1200 +1,873 @@
-import os
-import sys
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-from datetime import datetime, timedelta
-from pathlib import Path
+from tkinter import ttk, messagebox, filedialog, simpledialog
+import unicodedata
+import re
 
-from modelos.usuario import Usuario
-from modelos.administrador import Administrador
-from modelos.bibliotecario import Bibliotecario
-from modelos.membro import Membro
+
 from modelos.biblioteca import Biblioteca
-from modelos.item import Item
 from modelos.livro import Livro
 from modelos.ebook import Ebook
 from modelos.emprestimo import Emprestimo
-from modelos.reserva import Reserva
 from modelos.multa import Multa
+from modelos.membro import Membro
+from config import MULTA_POR_DIA
 
-class SistemaBiblioteca(tk.Tk):
+
+class App(tk.Tk):
+    """GUI simples para a biblioteca usando Tkinter puro.
+
+    Comentários em português; identificadores em inglês.
+    """
+
     def __init__(self):
         super().__init__()
-
-        self.title("Sistema de Biblioteca - Python Tkinter")
-        self.geometry("1400x800")
-        self.configure(bg="#ecf0f1")
-
-        # Inicializar biblioteca
-        self.biblioteca = Biblioteca()
-        self.usuario_logado = None
-
-        # Configurações
-        self.config = {
-            'PRAZO_DEVOLUCAO': 14,
-            'LIMITE_EMPRESTIMOS': 3,
-            'LIMITE_RENOVACOES': 2,
-            'MULTA_POR_DIA': 2.0
-        }
-
-        # Cores
-        self.cores = {
-            'primary': '#2c3e50',
-            'secondary': '#3498db',
-            'success': '#27ae60',
-            'danger': '#e74c3c',
-            'warning': '#f39c12',
-            'light': '#ecf0f1',
-            'dark': '#34495e'
-        }
-
-        # Arquivo de sessão
-        self.session_file = Path(__file__).parent.parent / 'session.json'
-
-        # Tentar login automático
-        if self.verificar_sessao():
-            self.criar_interface_principal()
-        else:
-            # Tela de login
-            self.criar_tela_login()
-
-    def verificar_sessao(self):
-        """Verifica se existe uma sessão salva válida"""
+        self.title('Biblioteca - GUI')
+        self.geometry('1000x600')
+     
         try:
-            if self.session_file.exists():
-                import json
-                with open(self.session_file, 'r') as f:
-                    data = json.load(f)
-                    user_id = data.get('user_id')
-                    
-                    if user_id:
-                        # Buscar usuário no banco
-                        # Precisamos converter para string para comparar se for UUID, ou int se for ID numérico
-                        # O repositório busca por ID.
-                        usuario = self.biblioteca.usuario_repo.buscar_por_id(user_id)
-                        
-                        if usuario:
-                            # Converter row para objeto
-                            self.usuario_logado = self.biblioteca.adapter.row_to_usuario(usuario)
-                            return True
-        except Exception as e:
-            print(f"Erro ao restaurar sessão: {e}")
-            
-        return False
-
-    def _dig(self, obj, *keys):
-        """Acessa valores aninhados de dicts ou atributos de objetos de forma segura.
-
-        Ex: _dig(e, 'membro', 'id') retorna e['membro']['id'] ou e.membro.id se existir.
-        """
-        cur = obj
-        for k in keys:
-            if cur is None:
-                return None
-            if isinstance(cur, dict):
-                cur = cur.get(k)
-            else:
-                cur = getattr(cur, k, None)
-        return cur
-
-    def criar_tela_login(self):
-        """Tela de login do sistema"""
-        self.limpar_tela()
-
-        # Frame principal centralizado
-        login_frame = tk.Frame(self, bg=self.cores['light'])
-        login_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        # Título
-        tk.Label(
-            login_frame,
-            text="🏛️ Sistema de Biblioteca",
-            font=("Arial", 28, "bold"),
-            bg=self.cores['light'],
-            fg=self.cores['primary']
-        ).pack(pady=20)
-
-        # Card de login
-        card = tk.Frame(login_frame, bg='white', relief='raised', bd=2)
-        card.pack(padx=40, pady=20)
-
-        tk.Label(
-            card,
-            text="Fazer Login",
-            font=("Arial", 18, "bold"),
-            bg='white',
-            fg=self.cores['dark']
-        ).pack(pady=20, padx=60)
-
-        # Email
-        tk.Label(card, text="Email:", font=("Arial", 12), bg='white').pack(anchor='w', padx=30)
-        self.login_email = tk.Entry(card, font=("Arial", 12), width=30)
-        self.login_email.pack(pady=5, padx=30)
-
-        # Senha
-        tk.Label(card, text="Senha:", font=("Arial", 12), bg='white').pack(anchor='w', padx=30, pady=(10,0))
-        self.login_senha = tk.Entry(card, font=("Arial", 12), width=30, show="*")
-        self.login_senha.pack(pady=5, padx=30)
-
-        # Botão login
-        tk.Button(
-            card,
-            text="Entrar",
-            font=("Arial", 12, "bold"),
-            bg=self.cores['secondary'],
-            fg='white',
-            width=25,
-            cursor='hand2',
-            command=self.fazer_login
-        ).pack(pady=20, padx=30)
-
-        # Informações de teste
-        info_frame = tk.Frame(card, bg='#f8f9fa')
-        info_frame.pack(fill='x', pady=(0, 20), padx=30)
-
-        tk.Label(
-            info_frame,
-            text="🔑 Credenciais de teste:",
-            font=("Arial", 10, "bold"),
-            bg='#f8f9fa'
-        ).pack(pady=5)
-
-        tk.Label(
-            info_frame,
-            text="Admin: admin@biblioteca.com / admin123",
-            font=("Arial", 9),
-            bg='#f8f9fa'
-        ).pack()
-
-        tk.Label(
-            info_frame,
-            text="Bibliotecário: maria@biblioteca.com / biblio123",
-            font=("Arial", 9),
-            bg='#f8f9fa'
-        ).pack()
-
-        tk.Label(
-            info_frame,
-            text="Membro: joao@email.com / senha123",
-            font=("Arial", 9),
-            bg='#f8f9fa'
-        ).pack()
-
-        self.login_senha.bind('<Return>', lambda e: self.fazer_login())
-
-    def fazer_login(self):
-        """Autenticar usuário"""
-        email = self.login_email.get()
-        senha = self.login_senha.get()
-
-        usuario = next((u for u in self.biblioteca.usuarios if u.email == email and u.senha == senha), None)
-
-        if usuario:
-            self.usuario_logado = usuario
-            
-            # Salvar sessão
+            self.option_add('*Font', ('Segoe UI', 10))
+        except Exception:
             try:
-                import json
-                with open(self.session_file, 'w') as f:
-                    json.dump({'user_id': usuario.id}, f)
-            except Exception as e:
-                print(f"Erro ao salvar sessão: {e}")
-                
-            self.criar_interface_principal()
-        else:
-            messagebox.showerror("Erro", "Email ou senha incorretos!")
-
-    def criar_interface_principal(self):
-        """Interface principal do sistema"""
-        self.limpar_tela()
-
-        # Header
-        self.criar_header()
-
-        # Container principal
-        main_container = tk.Frame(self, bg='white')
-        main_container.pack(fill='both', expand=True, padx=0, pady=0)
-
-        # Sidebar
-        self.criar_sidebar(main_container)
-
-        # Área de conteúdo
-        self.content_frame = tk.Frame(main_container, bg='#f8f9fa')
-        self.content_frame.pack(side='left', fill='both', expand=True)
-
-        # Mostrar dashboard
-        self.mostrar_dashboard()
-
-    def criar_header(self):
-        """Criar cabeçalho do sistema"""
-        header = tk.Frame(self, bg=self.cores['primary'], height=80)
-        header.pack(fill='x')
-        header.pack_propagate(False)
-
-        # Título
-        tk.Label(
-            header,
-            text="📚 Sistema de Biblioteca",
-            font=("Arial", 20, "bold"),
-            bg=self.cores['primary'],
-            fg='white'
-        ).pack(side='left', padx=30, pady=20)
-
-        # Informações do usuário
-        user_frame = tk.Frame(header, bg=self.cores['primary'])
-        user_frame.pack(side='right', padx=30)
-
-        tk.Label(
-            user_frame,
-            text=self.usuario_logado.nome,
-            font=("Arial", 12),
-            bg=self.cores['primary'],
-            fg='white'
-        ).pack(side='left', padx=10)
-
-        # Badge do tipo de usuário
-        badge_colors = {
-            'administrador': self.cores['danger'],
-            'bibliotecario': self.cores['secondary'],
-            'membro': self.cores['success']
-        }
-
-        tk.Label(
-            user_frame,
-            text=self.usuario_logado.tipo.upper(),
-            font=("Arial", 9, "bold"),
-            bg=badge_colors.get(self.usuario_logado.tipo, self.cores['dark']),
-            fg='white',
-            padx=12,
-            pady=4
-        ).pack(side='left', padx=5)
-
-        # Botão sair
-        tk.Button(
-            user_frame,
-            text="Sair",
-            font=("Arial", 10),
-            bg=self.cores['danger'],
-            fg='white',
-            cursor='hand2',
-            command=self.logout
-        ).pack(side='left', padx=10)
-
-    def criar_sidebar(self, parent):
-        """Criar menu lateral"""
-        sidebar = tk.Frame(parent, bg=self.cores['light'], width=250)
-        sidebar.pack(side='left', fill='y')
-        sidebar.pack_propagate(False)
-
-        tipo = self.usuario_logado.tipo
-
-        # Definir menu por tipo de usuário
-        if tipo == 'administrador':
-            menus = [
-                ('📊', 'Dashboard', self.mostrar_dashboard),
-                ('👥', 'Usuários', self.mostrar_usuarios),
-                ('📚', 'Acervo', self.mostrar_itens),
-                ('📖', 'Empréstimos', self.mostrar_emprestimos),
-                ('📌', 'Reservas', self.mostrar_reservas),
-                ('💰', 'Multas', self.mostrar_multas)
-            ]
-        elif tipo == 'bibliotecario':
-            menus = [
-                ('📊', 'Dashboard', self.mostrar_dashboard),
-                ('📚', 'Acervo', self.mostrar_itens),
-                ('📖', 'Empréstimos', self.mostrar_emprestimos),
-                ('📌', 'Reservas', self.mostrar_reservas),
-                ('💰', 'Multas', self.mostrar_multas)
-            ]
-        else:  # membro
-            menus = [
-                ('📊', 'Dashboard', self.mostrar_dashboard),
-                ('📚', 'Catálogo', self.mostrar_itens),
-                ('📖', 'Meus Empréstimos', self.mostrar_meus_emprestimos),
-                ('📌', 'Minhas Reservas', self.mostrar_reservas)
-            ]
-
-        for icon, text, command in menus:
-            self.criar_menu_item(sidebar, icon, text, command)
-
-    def criar_menu_item(self, parent, icon, text, command):
-        """Criar item de menu"""
-        btn = tk.Button(
-            parent,
-            text=f"{icon}  {text}",
-            font=("Arial", 12),
-            bg=self.cores['light'],
-            fg=self.cores['dark'],
-            relief='flat',
-            anchor='w',
-            padx=20,
-            pady=15,
-            cursor='hand2',
-            command=command
-        )
-        btn.pack(fill='x')
-
-        btn.bind('<Enter>', lambda e: btn.config(bg=self.cores['secondary'], fg='white'))
-        btn.bind('<Leave>', lambda e: btn.config(bg=self.cores['light'], fg=self.cores['dark']))
-
-    def mostrar_dashboard(self):
-        """Mostrar dashboard com estatísticas"""
-        self.limpar_content()
-
-        # Título
-        tk.Label(
-            self.content_frame,
-            text="Dashboard",
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
-
-        # Cards de estatísticas
-        stats_frame = tk.Frame(self.content_frame, bg='#f8f9fa')
-        stats_frame.pack(fill='x', padx=30, pady=10)
-
-        tipo = self.usuario_logado.tipo
-
-        if tipo in ['administrador', 'bibliotecario']:
-            stats = [
-                ('Total de Usuários', len(self.biblioteca.usuarios), self.cores['primary']),
-                ('Itens no Acervo', len(self.biblioteca.itens), self.cores['secondary']),
-                ('Empréstimos Ativos', len([e for e in self.biblioteca.emprestimos if self._dig(e, 'status') == 'ativo']), self.cores['success']),
-                ('Reservas Ativas', len([r for r in self.biblioteca.reservas if self._dig(r, 'status') == 'aguardando']), self.cores['warning'])
-            ]
-        else:
-            stats = [
-                ('Meus Empréstimos', len([e for e in self.biblioteca.emprestimos if self._dig(e, 'membro', 'id') == self.usuario_logado.id and self._dig(e, 'status') == 'ativo']), self.cores['primary']),
-                ('Minhas Reservas', len([r for r in self.biblioteca.reservas if self._dig(r, 'membro', 'id') == self.usuario_logado.id]), self.cores['secondary']),
-                ('Itens Disponíveis', len([i for i in self.biblioteca.itens if self._dig(i, 'status') == 'disponivel']), self.cores['success'])
-            ]
-
-        for i, (label, value, color) in enumerate(stats):
-            self.criar_stat_card(stats_frame, label, value, color, i)
-
-    def criar_stat_card(self, parent, label, value, color, position):
-        """Criar card de estatística"""
-        card = tk.Frame(parent, bg='white', relief='raised', bd=1)
-        card.grid(row=0, column=position, padx=10, pady=10, sticky='ew')
-        parent.columnconfigure(position, weight=1)
-
-        # Barra colorida
-        tk.Frame(card, bg=color, height=4).pack(fill='x')
-
-        # Valor
-        tk.Label(
-            card,
-            text=str(value),
-            font=("Arial", 32, "bold"),
-            bg='white',
-            fg=self.cores['primary']
-        ).pack(pady=(20, 5))
-
-        # Label
-        tk.Label(
-            card,
-            text=label,
-            font=("Arial", 11),
-            bg='white',
-            fg='#7f8c8d'
-        ).pack(pady=(0, 20))
-
-    def mostrar_usuarios(self):
-        """Gerenciar usuários"""
-        self.limpar_content()
-
-        tk.Label(
-            self.content_frame,
-            text="Gerenciar Usuários",
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
-
-        # Card de cadastro
-        card_cadastro = self.criar_card(self.content_frame, "Cadastrar Novo Usuário")
-
-        # Formulário
-        form_frame = tk.Frame(card_cadastro, bg='white')
-        form_frame.pack(fill='x', padx=20, pady=10)
-
-        # Nome
-        tk.Label(form_frame, text="Nome Completo:", font=("Arial", 10), bg='white').grid(row=0, column=0, sticky='w', pady=5)
-        nome_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-        nome_entry.grid(row=0, column=1, padx=10, pady=5)
-
-        # Email
-        tk.Label(form_frame, text="Email:", font=("Arial", 10), bg='white').grid(row=0, column=2, sticky='w', pady=5)
-        email_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-        email_entry.grid(row=0, column=3, padx=10, pady=5)
-
-        # CPF
-        tk.Label(form_frame, text="CPF:", font=("Arial", 10), bg='white').grid(row=1, column=0, sticky='w', pady=5)
-        cpf_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-        cpf_entry.grid(row=1, column=1, padx=10, pady=5)
-
-        # Tipo
-        tk.Label(form_frame, text="Tipo:", font=("Arial", 10), bg='white').grid(row=1, column=2, sticky='w', pady=5)
-        tipo_var = tk.StringVar()
-        tipo_combo = ttk.Combobox(form_frame, textvariable=tipo_var, values=['membro', 'bibliotecario', 'administrador'], state='readonly', width=27)
-        tipo_combo.grid(row=1, column=3, padx=10, pady=5)
-
-        # Senha
-        tk.Label(form_frame, text="Senha:", font=("Arial", 10), bg='white').grid(row=2, column=0, sticky='w', pady=5)
-        senha_entry = tk.Entry(form_frame, font=("Arial", 10), width=30, show='*')
-        senha_entry.grid(row=2, column=1, padx=10, pady=5)
-
-        # Botão cadastrar
-        def cadastrar():
-            if all([nome_entry.get(), email_entry.get(), cpf_entry.get(), tipo_var.get(), senha_entry.get()]):
-                try:
-                    # use o método do modelo para criar o usuário correto (membro/bibliotecario/administrador)
-                    self.biblioteca.adicionar_usuario(
-                        nome_entry.get(),
-                        email_entry.get(),
-                        senha_entry.get(),
-                        cpf_entry.get(),
-                        tipo_var.get()
-                    )
-                    messagebox.showinfo("Sucesso", "Usuário cadastrado com sucesso!")
-                    self.mostrar_usuarios()
-                except Exception as e:
-                    messagebox.showerror("Erro", str(e))
-            else:
-                messagebox.showerror("Erro", "Preencha todos os campos!")
-
-        tk.Button(
-            form_frame,
-            text="➕ Cadastrar Usuário",
-            font=("Arial", 11, "bold"),
-            bg=self.cores['success'],
-            fg='white',
-            cursor='hand2',
-            command=cadastrar
-        ).grid(row=3, column=0, columnspan=4, pady=15)
-
-        # Card de lista
-        card_lista = self.criar_card(self.content_frame, "Lista de Usuários")
-
-        # Tabela
-        self.criar_tabela_usuarios(card_lista)
-
-    def criar_tabela_usuarios(self, parent):
-        """Criar tabela de usuários"""
-        # Frame para tabela
-        table_frame = tk.Frame(parent, bg='white')
-        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(table_frame)
-        scrollbar.pack(side='right', fill='y')
-
-        # Treeview
-        tree = ttk.Treeview(
-            table_frame,
-            columns=('Nome', 'Email', 'CPF', 'Tipo'),
-            show='headings',
-            yscrollcommand=scrollbar.set,
-            height=10
-        )
-
-        tree.heading('Nome', text='Nome')
-        tree.heading('Email', text='Email')
-        tree.heading('CPF', text='CPF')
-        tree.heading('Tipo', text='Tipo')
-
-        tree.column('Nome', width=200)
-        tree.column('Email', width=200)
-        tree.column('CPF', width=150)
-        tree.column('Tipo', width=150)
-
-        # Preencher dados
-        for usuario in self.biblioteca.usuarios:
-            tree.insert('', 'end', values=(
-                usuario.nome,
-                usuario.email,
-                usuario.cpf,
-                usuario.tipo.upper()
-            ))
-
-        tree.pack(fill='both', expand=True)
-        scrollbar.config(command=tree.yview)
-
-    def mostrar_itens(self):
-        """Gerenciar acervo"""
-        self.limpar_content()
-
-        titulo = "Gerenciar Acervo" if self.usuario_logado.tipo != 'membro' else "Catálogo de Itens"
-
-        tk.Label(
-            self.content_frame,
-            text=titulo,
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
-
-        # Card de cadastro (só para admin e bibliotecário)
-        if self.usuario_logado.tipo in ['administrador', 'bibliotecario']:
-            card_cadastro = self.criar_card(self.content_frame, "Cadastrar Novo Item")
-
-            form_frame = tk.Frame(card_cadastro, bg='white')
-            form_frame.pack(fill='x', padx=20, pady=10)
-
-            # Tipo
-            tk.Label(form_frame, text="Tipo:", font=("Arial", 10), bg='white').grid(row=0, column=0, sticky='w', pady=5)
-            tipo_var = tk.StringVar()
-            tipo_combo = ttk.Combobox(form_frame, textvariable=tipo_var, values=['livro', 'ebook'], state='readonly', width=27)
-            tipo_combo.grid(row=0, column=1, padx=10, pady=5)
-
-            # Título
-            tk.Label(form_frame, text="Título:", font=("Arial", 10), bg='white').grid(row=0, column=2, sticky='w', pady=5)
-            titulo_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-            titulo_entry.grid(row=0, column=3, padx=10, pady=5)
-
-            # Autor
-            tk.Label(form_frame, text="Autor:", font=("Arial", 10), bg='white').grid(row=1, column=0, sticky='w', pady=5)
-            autor_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-            autor_entry.grid(row=1, column=1, padx=10, pady=5)
-
-            # ISBN
-            tk.Label(form_frame, text="ISBN:", font=("Arial", 10), bg='white').grid(row=1, column=2, sticky='w', pady=5)
-            isbn_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-            isbn_entry.grid(row=1, column=3, padx=10, pady=5)
-
-            # Categoria
-            tk.Label(form_frame, text="Categoria:", font=("Arial", 10), bg='white').grid(row=2, column=0, sticky='w', pady=5)
-            categoria_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-            categoria_entry.grid(row=2, column=1, padx=10, pady=5)
-
-            # Páginas
-            tk.Label(form_frame, text="Páginas:", font=("Arial", 10), bg='white').grid(row=2, column=2, sticky='w', pady=5)
-            paginas_entry = tk.Entry(form_frame, font=("Arial", 10), width=30)
-            paginas_entry.grid(row=2, column=3, padx=10, pady=5)
-
-            def cadastrar_item():
-                if all([tipo_var.get(), titulo_entry.get(), autor_entry.get(), isbn_entry.get()]):
-                    try:
-                        tipo = tipo_var.get()
-                        nome = titulo_entry.get()
-                        autor = autor_entry.get()
-                        isbn = isbn_entry.get()
-                        categoria = categoria_entry.get()
-                        paginas = int(paginas_entry.get()) if paginas_entry.get().isdigit() else 0
-                        
-                        if tipo == 'livro':
-                            novo_item = Livro(
-                                nome=nome,
-                                imagem_url=None,
-                                imagem_arquivo=None,
-                                autor=autor,
-                                num_paginas=paginas,
-                                isbn=isbn,
-                                categoria=categoria
-                            )
-                        elif tipo == 'ebook':
-                            novo_item = Ebook(
-                                nome=nome,
-                                imagem_url=None,
-                                imagem_arquivo=None,
-                                autor=autor,
-                                num_paginas=paginas,
-                                isbn=isbn,
-                                categoria=categoria,
-                                arquivo=None,
-                                url=None
-                            )
-                        else:
-                            raise ValueError("Tipo de item inválido")
-
-                        self.biblioteca.adicionar_item(novo_item)
-                        messagebox.showinfo("Sucesso", "Item cadastrado com sucesso!")
-                        self.mostrar_itens()
-                    except Exception as e:
-                        messagebox.showerror("Erro", f"Erro ao cadastrar item: {str(e)}")
-                else:
-                    messagebox.showerror("Erro", "Preencha todos os campos obrigatórios!")
-
-            tk.Button(
-                form_frame,
-                text="➕ Cadastrar Item",
-                font=("Arial", 11, "bold"),
-                bg=self.cores['success'],
-                fg='white',
-                cursor='hand2',
-                command=cadastrar_item
-            ).grid(row=3, column=0, columnspan=4, pady=15)
-
-        # Card de lista
-        card_lista = self.criar_card(self.content_frame, "Acervo da Biblioteca")
-
-        # Grid de itens
-        self.criar_grid_itens(card_lista)
-
-    def criar_grid_itens(self, parent):
-        """Criar grid de itens"""
-        canvas = tk.Canvas(parent, bg='white', highlightthickness=0)
-        scrollbar = ttk.Scrollbar(parent, orient='vertical', command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg='white')
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor='nw')
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # Criar cards de itens
-        for i, item in enumerate(self.biblioteca.itens):
-            row = i // 3
-            col = i % 3
-
-            item_card = tk.Frame(scrollable_frame, bg='white', relief='raised', bd=1)
-            item_card.grid(row=row, column=col, padx=10, pady=10, sticky='nsew')
-
-            # Título
-            tk.Label(
-                item_card,
-                text=self._dig(item, 'nome') or str(self._dig(item, 'titulo') or ''),
-                font=("Arial", 12, "bold"),
-                bg='white',
-                fg=self.cores['primary'],
-                wraplength=200
-            ).pack(pady=10, padx=10)
-
-            # Detalhes
-            detalhes = [
-                f"Autor: {self._dig(item, 'autor')}",
-                f"Categoria: {self._dig(item, 'categoria')}",
-                f"Páginas: {self._dig(item, 'num_paginas')}",
-                f"Tipo: {'📕 Livro' if self._dig(item, 'tipo') == 'livro' else '💻 E-book'}"
-            ]
-
-            for detalhe in detalhes:
-                tk.Label(
-                    item_card,
-                    text=detalhe,
-                    font=("Arial", 9),
-                    bg='white',
-                    fg='#7f8c8d'
-                ).pack(anchor='w', padx=10, pady=2)
-
-            # Status
-            status_colors = {
-                'disponivel': '#d4edda',
-                'emprestado': '#fff3cd',
-                'reservado': '#cce5ff'
-            }
-
-            # Calcular status dinamicamente
-            ids_emprestados = {str(e.item.id) for e in self.biblioteca.emprestimos if e.status == 'ativo'}
-            status_val = 'emprestado' if str(item.id) in ids_emprestados else 'disponivel'
-            
-            # TODO: Verificar reservas também se necessário para status 'reservado'
-            # Por enquanto, simplificado para disponivel/emprestado conforme lógica anterior
-            tk.Label(
-                item_card,
-                text=str(status_val).upper(),
-                font=("Arial", 9, "bold"),
-                bg=status_colors.get(status_val, '#f8f9fa'),
-                fg='#000',
-                padx=10,
-                pady=3
-            ).pack(pady=10)
-
-        # Configurar grid
-        for i in range(3):
-            scrollable_frame.columnconfigure(i, weight=1)
-
-        canvas.pack(side='left', fill='both', expand=True, padx=20, pady=10)
-        scrollbar.pack(side='right', fill='y')
-
-    def mostrar_emprestimos(self):
-        """Gerenciar empréstimos"""
-        self.limpar_content()
-
-        tk.Label(
-            self.content_frame,
-            text="Gerenciar Empréstimos",
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
-
-        # Card de novo empréstimo
-        card_novo = self.criar_card(self.content_frame, "Novo Empréstimo")
-
-        form_frame = tk.Frame(card_novo, bg='white')
-        form_frame.pack(fill='x', padx=20, pady=10)
-
-        # Selecionar membro
-        tk.Label(form_frame, text="Membro:", font=("Arial", 10), bg='white').grid(row=0, column=0, sticky='w', pady=10)
-        membro_var = tk.StringVar()
-        membros = [u for u in self.biblioteca.usuarios if u.tipo == 'membro']
-        membro_combo = ttk.Combobox(
-            form_frame,
-            textvariable=membro_var,
-            values=[f"{m.nome} ({m.email})" for m in membros],
-            state='readonly',
-            width=40
-        )
-        membro_combo.grid(row=0, column=1, padx=10, pady=10)
-
-        # Selecionar item
-        tk.Label(form_frame, text="Item:", font=("Arial", 10), bg='white').grid(row=0, column=2, sticky='w', pady=10)
-        item_var = tk.StringVar()
-        # Itens disponíveis: aqueles que não estão em empréstimos ativos
-        # Obter IDs de itens emprestados
-        ids_emprestados = {str(e.item.id) for e in self.biblioteca.emprestimos if e.status == 'ativo'}
-        
-        # Filtrar itens: deve ser emprestável e não estar na lista de emprestados
-        # Nota: removido filtro estrito de 'livro' para permitir ebooks se forem emprestáveis, 
-        # mas mantendo compatibilidade com lógica anterior se necessário. 
-        # Se quiser apenas livros: and isinstance(i, Livro)
-        itens_disponiveis = [
-            i for i in self.biblioteca.itens 
-            if i.emprestavel and str(i.id) not in ids_emprestados
-        ]
-        item_combo = ttk.Combobox(
-            form_frame,
-            textvariable=item_var,
-            values=[f"{self._dig(i, 'nome')} - {self._dig(i, 'autor')}" for i in itens_disponiveis],
-            state='readonly',
-            width=40
-        )
-        item_combo.grid(row=0, column=3, padx=10, pady=10)
-
-        def realizar_emprestimo():
-            if membro_var.get() and item_var.get():
-                membro_idx = membro_combo.current()
-                item_idx = item_combo.current()
-
-                if membro_idx >= 0 and item_idx >= 0:
-                    membro = membros[membro_idx]
-                    item = itens_disponiveis[item_idx]
-                    try:
-                        # usar método do modelo para criar um Emprestimo (objeto)
-                        self.biblioteca.emprestar_item(item, membro)
-                        # garantir que o item (dicionário) registre status
-                        if isinstance(item, dict):
-                            item['status'] = 'emprestado'
-                        messagebox.showinfo("Sucesso", "Empréstimo realizado com sucesso!")
-                        self.mostrar_emprestimos()
-                    except Exception as e:
-                        messagebox.showerror('Erro', str(e))
-            else:
-                messagebox.showerror("Erro", "Selecione membro e item!")
-
-        tk.Button(
-            form_frame,
-            text="📖 Realizar Empréstimo",
-            font=("Arial", 11, "bold"),
-            bg=self.cores['primary'],
-            fg='white',
-            cursor='hand2',
-            command=realizar_emprestimo
-        ).grid(row=1, column=0, columnspan=4, pady=15)
-
-        # Card de lista
-        card_lista = self.criar_card(self.content_frame, "Empréstimos Ativos")
-        self.criar_tabela_emprestimos(card_lista)
-
-    def criar_tabela_emprestimos(self, parent):
-        """Criar tabela de empréstimos"""
-        table_frame = tk.Frame(parent, bg='white')
-        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
-
-        scrollbar = ttk.Scrollbar(table_frame)
-        scrollbar.pack(side='right', fill='y')
-
-        tree = ttk.Treeview(
-            table_frame,
-            columns=('Membro', 'Item', 'Data Empréstimo', 'Data Prevista', 'Status', 'Renovações'),
-            show='headings',
-            yscrollcommand=scrollbar.set,
-            height=10
-        )
-
-        for col in ['Membro', 'Item', 'Data Empréstimo', 'Data Prevista', 'Status', 'Renovações']:
-            tree.heading(col, text=col)
-            tree.column(col, width=150)
-
-        # obter empréstimos ativos (suportar objetos Emprestimo ou dicts antigos)
-        emprestimos_ativos = []
-        for e in self.biblioteca.emprestimos:
-            status_val = None
-            if isinstance(e, dict):
-                status_val = e.get('status')
-            else:
-                status_val = getattr(e, 'status', None)
-            if status_val == 'ativo':
-                emprestimos_ativos.append(e)
-
-        # Inserir empréstimos com iid = índice para facilitar mapeamento
-        for idx, emp in enumerate(emprestimos_ativos):
-            if isinstance(emp, dict):
-                membro_nome = emp.get('membro', {}).get('nome', '')
-                item_nome = emp.get('item', {}).get('nome', '')
-                data_emp = emp.get('dataEmprestimo')
-                data_prev = emp.get('dataPrevista')
-                renov = emp.get('renovacoes', 0)
-                status_text = str(emp.get('status', '')).upper()
-                # formatos de data
-                data_emp_str = data_emp.strftime('%d/%m/%Y') if hasattr(data_emp, 'strftime') else str(data_emp)
-                data_prev_str = data_prev.strftime('%d/%m/%Y') if hasattr(data_prev, 'strftime') else str(data_prev)
-            else:
-                membro_nome = getattr(emp.membro, 'nome', '') if getattr(emp, 'membro', None) is not None else ''
-                # item pode ser dict ou objeto
-                item_val = getattr(emp, 'item', None)
-                item_nome = item_val.get('nome') if isinstance(item_val, dict) else getattr(item_val, 'nome', '')
-                data_emp_str = getattr(emp, 'data_emprestimo', getattr(emp, 'dataEmprestimo', None))
-                if hasattr(data_emp_str, 'strftime'):
-                    data_emp_str = data_emp_str.strftime('%d/%m/%Y')
-                else:
-                    data_emp_str = str(data_emp_str)
-                # data prevista
-                try:
-                    data_prev = getattr(emp, 'data_prevista_devolucao', getattr(emp, 'dataPrevista', None))
-                    data_prev_str = data_prev.strftime('%d/%m/%Y') if hasattr(data_prev, 'strftime') else str(data_prev)
-                except Exception:
-                    data_prev_str = ''
-                renov = getattr(emp, 'quantidade_renovacoes', getattr(emp, 'renovacoes', 0))
-                status_text = str(getattr(emp, 'status', '')).upper()
-
-            tree.insert('', 'end', iid=str(idx), values=(
-                membro_nome,
-                item_nome,
-                data_emp_str,
-                data_prev_str,
-                status_text,
-                f"{renov}/{self.config['LIMITE_RENOVACOES']}"
-            ))
-
-        tree.pack(fill='both', expand=True)
-        scrollbar.config(command=tree.yview)
-
-        # Botão para processar devolução do empréstimo selecionado
-        def processar_devolucao():
-            sel = tree.selection()
-            if not sel:
-                messagebox.showerror('Erro', 'Selecione um empréstimo para processar a devolução.')
-                return
-
-            iid = sel[0]
-            try:
-                idx = int(iid)
-            except ValueError:
-                messagebox.showerror('Erro', 'Seleção inválida.')
-                return
-
-            # Map index no array de empréstimos ativos para o empréstimo real
-            emp = emprestimos_ativos[idx]
-
-            # Se for um objeto Emprestimo, usar API do modelo
-            if not isinstance(emp, dict):
-                try:
-                    emprestimo = self.biblioteca.registrar_devolucao(emp.id)
-                except Exception as e:
-                    messagebox.showerror('Erro', str(e))
-                    return
-
-                # Se multado, perguntar sobre quitação
-                if getattr(emprestimo, 'status', '') == 'multado' and getattr(emprestimo, 'multa', None) is not None:
-                    valor = getattr(emprestimo.multa, 'valor', None)
-                    resp = messagebox.askyesno('Multa gerada', f'Valor da multa: {valor:.2f}. Deseja quitar agora?')
-                    if resp:
-                        try:
-                            self.biblioteca.registrar_pagamento_multa(emprestimo.id)
-                            messagebox.showinfo('Pago', 'Multa quitada e empréstimo finalizado.')
-                        except Exception as e:
-                            messagebox.showerror('Erro', str(e))
-                else:
-                    messagebox.showinfo('Devolução', 'Empréstimo processado com sucesso.')
-
-            else:
-                # fallback para dict-based emprestimos
-                try:
-                    data_prevista = emp['dataPrevista'] if hasattr(emp.get('dataPrevista'), 'strftime') else datetime.strptime(emp['dataPrevista'], '%d/%m/%Y')
-                except Exception:
-                    data_prevista = emp.get('dataPrevista')
-                agora = datetime.now()
-                atraso = (agora.date() - data_prevista.date()).days if hasattr(data_prevista, 'date') else 0
-
-                if atraso > 0:
-                    valor_multa = atraso * self.config['MULTA_POR_DIA']
-                    emp['status'] = 'multado'
-                    emp['multa'] = {'valor': valor_multa, 'paga': False}
-                    emp['dataDevolucao'] = agora
-                    if isinstance(emp.get('item'), dict):
-                        emp['item']['status'] = 'disponivel'
-                    resp = messagebox.askyesno('Multa gerada', f'Em atraso por {atraso} dias. Multa = {valor_multa:.2f}. Deseja quitar agora?')
-                    if resp:
-                        emp['multa']['paga'] = True
-                        emp['status'] = 'finalizado'
-                        messagebox.showinfo('Pago', 'Multa quitada e empréstimo finalizado.')
-                    else:
-                        messagebox.showinfo('Registrado', f'Multa registrada: {valor_multa:.2f}')
-                else:
-                    emp['status'] = 'finalizado'
-                    emp['dataDevolucao'] = agora
-                    if isinstance(emp.get('item'), dict):
-                        emp['item']['status'] = 'disponivel'
-                    messagebox.showinfo('Devolução', 'Empréstimo devolvido sem multa.')
-
-            # Atualizar visual da tabela (simplesmente recarregar a tela)
-            self.mostrar_emprestimos()
-
-        tk.Button(parent, text='📥 Processar Devolução', font=('Arial', 11), bg=self.cores['secondary'], fg='white', cursor='hand2', command=processar_devolucao).pack(pady=8)
-
-    def mostrar_reservas(self):
-        """Gerenciar reservas: listar, criar e cancelar reservas"""
-        self.limpar_content()
-
-        titulo = "Gerenciar Reservas" if self.usuario_logado.tipo != 'membro' else "Minhas Reservas"
-
-        tk.Label(
-            self.content_frame,
-            text=titulo,
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
-
-        # Card superior: criar reserva
-        card_cadastro = self.criar_card(self.content_frame, "Reservar Item")
-
-        form_frame = tk.Frame(card_cadastro, bg='white')
-        form_frame.pack(fill='x', padx=20, pady=10)
-
-        # Membro (se admin/bibliotecario pode escolher, se membro usa o próprio)
-        tk.Label(form_frame, text="Membro:", font=("Arial", 10), bg='white').grid(row=0, column=0, sticky='w', pady=5)
-        membro_var = tk.StringVar()
-        if self.usuario_logado.tipo in ['administrador', 'bibliotecario']:
-            membros = [u for u in self.biblioteca.usuarios if getattr(u, 'tipo', None) == 'membro']
-            membro_combo = ttk.Combobox(form_frame, textvariable=membro_var, values=[f"{m.nome} ({m.email})" for m in membros], state='readonly', width=50)
-            membro_combo.grid(row=0, column=1, padx=10, pady=5)
-        else:
-            membro_combo = tk.Label(form_frame, text=self.usuario_logado.nome, bg='white')
-            membro_combo.grid(row=0, column=1, padx=10, pady=5, sticky='w')
-
-        # Item (mostrar apenas itens que não estão disponíveis -> emprestados)
-        tk.Label(form_frame, text="Item:", font=("Arial", 10), bg='white').grid(row=1, column=0, sticky='w', pady=5)
-        item_var = tk.StringVar()
-        itens_para_reserva = [i for i in self.biblioteca.itens if self._dig(i, 'status') != 'disponivel']
-        item_combo = ttk.Combobox(form_frame, textvariable=item_var, values=[f"{self._dig(i, 'nome')} - {self._dig(i, 'autor')} (ID:{self._dig(i, 'id')})" for i in itens_para_reserva], state='readonly', width=50)
-        item_combo.grid(row=1, column=1, padx=10, pady=5)
-
-        def criar_reserva():
-            # determinar membro
-            if self.usuario_logado.tipo in ['administrador', 'bibliotecario']:
-                sel = membro_combo.current()
-                if sel < 0:
-                    messagebox.showerror('Erro', 'Selecione um membro')
-                    return
-                membro = membros[sel]
-            else:
-                membro = self.usuario_logado
-
-            item_idx = item_combo.current()
-            if item_idx < 0:
-                messagebox.showerror('Erro', 'Selecione um item para reservar')
-                return
-
-            item = itens_para_reserva[item_idx]
-
-            try:
-                # usar método do modelo
-                self.biblioteca.reservar_item(item, membro)
-                messagebox.showinfo('Sucesso', 'Reserva criada com sucesso')
-                self.mostrar_reservas()
-            except Exception as e:
-                messagebox.showerror('Erro', str(e))
-
-        tk.Button(form_frame, text="➕ Criar Reserva", font=("Arial", 11, "bold"), bg=self.cores['success'], fg='white', cursor='hand2', command=criar_reserva).grid(row=2, column=0, columnspan=2, pady=12)
-
-        # Card lista: mostrar reservas
-        card_lista = self.criar_card(self.content_frame, "Lista de Reservas")
-
-        table_frame = tk.Frame(card_lista, bg='white')
-        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
-
-        cols = ('Membro', 'Item', 'Data Reserva', 'Status')
-        tree = ttk.Treeview(table_frame, columns=cols, show='headings', height=10)
+                self.option_add('*Font', ('Arial', 10))
+            except Exception:
+                pass
+
+        self.library = Biblioteca()
+
+        self.library.adicionar_usuario('João', 'joao@example.com', '123', '12345678900', 'membro')
+        self.library.adicionar_usuario('Maria', 'maria@example.com', '123', '98765432100', 'bibliotecario')
+        self.library.adicionar_item(Livro('Aprendendo Python', '', '', 'Luciano', 300, '111', 'Programação'))
+
+        self.items_map = {}
+        self.users_map = {}
+        self.loans_map = {}
+        self.reservations_map = {}
+        self.pending_loan_member = None
+
+        self.create_widgets()
+        self.refresh_all()
+
+    def setup_style(self):
+    
+        style = ttk.Style(self)
+        try:
+            style.theme_use('clam')
+        except Exception:
+            pass
+
+        style.configure('Treeview', rowheight=26, font=('Segoe UI', 10), fieldbackground='#FFFFFF')
+        style.configure('Treeview.Heading', font=('Segoe UI', 10, 'bold'))
+        style.configure('TButton', padding=(6, 3))
+        style.configure('TEntry', padding=(3, 3))
+
+
+    def create_widgets(self):
+        notebook = ttk.Notebook(self)
+        self.notebook = notebook
+        notebook.pack(fill='both', expand=True)
+
+        self.frame_items = ttk.Frame(notebook)
+        self.frame_users = ttk.Frame(notebook)
+        self.frame_loans = ttk.Frame(notebook)
+        self.frame_reservations = ttk.Frame(notebook)
+
+        notebook.add(self.frame_items, text='Catálogo')
+        notebook.add(self.frame_users, text='Usuários')
+
+        self.frame_register = ttk.Frame(notebook)
+        notebook.add(self.frame_register, text='Registrar Empréstimo')
+        notebook.add(self.frame_loans, text='Empréstimos')
+        notebook.add(self.frame_reservations, text='Reservas')
+
+        self.build_items_tab()
+        self.build_users_tab()
+        self.build_register_tab()
+        self.build_loans_tab()
+        self.build_reservations_tab()
+   
+        self.setup_style()
+
+        self.status_var = tk.StringVar(value='Pronto')
+        self.status_label = ttk.Label(self, textvariable=self.status_var, anchor='w', relief='sunken')
+        self.status_label.pack(fill='x', side='bottom')
+
+    def build_items_tab(self):
+        frame = self.frame_items
+  
+        search_frame = ttk.Frame(frame)
+        search_frame.pack(fill='x', padx=8, pady=4)
+
+        tk.Label(search_frame, text='Buscar:').pack(side='left')
+        self.entry_item_search = ttk.Entry(search_frame)
+        self.entry_item_search.pack(side='left', padx=4)
+        self.entry_item_search.bind('<KeyRelease>', lambda e: self.search_items())
+        ttk.Button(search_frame, text='Pesquisar', command=self.search_items).pack(side='left', padx=4)
+
+        # treeview
+        cols = ('id', 'nome', 'autor', 'isbn', 'categoria', 'paginas', 'emprestavel')
+        self.tree_items = ttk.Treeview(frame, columns=cols, show='headings')
         for c in cols:
-            tree.heading(c, text=c)
-            tree.column(c, width=200)
+            self.tree_items.heading(c, text=c.title())
+        self.tree_items.pack(fill='both', expand=True, padx=8, pady=4)
+        # detalhes do item selecionado
+        self.details_item_label = ttk.Label(frame, text='', anchor='w')
+        self.details_item_label.pack(fill='x', padx=8)
 
-        # Filtrar reservas: se membro, mostrar apenas as do próprio membro
-        reservas = self.biblioteca.reservas
-        if self.usuario_logado.tipo == 'membro':
-            reservas = [r for r in reservas if getattr(r.membro, 'id', None) == self.usuario_logado.id]
+        # ações
+        action_frame = ttk.Frame(frame)
+        action_frame.pack(fill='x', padx=8, pady=4)
+        self.btn_add_item = ttk.Button(action_frame, text='Adicionar Item', command=self.add_item_window)
+        self.btn_add_item.pack(side='left')
+        self.btn_edit_item = ttk.Button(action_frame, text='Editar Item', command=self.edit_item_window, state='disabled')
+        self.btn_edit_item.pack(side='left')
+        self.btn_remove_item = ttk.Button(action_frame, text='Remover Item', command=self.remove_item, state='disabled')
+        self.btn_remove_item.pack(side='left')
+        self.btn_confirm_loan = ttk.Button(action_frame, text='Emprestar Selecionado', command=self.confirm_loan_for_pending, state='disabled')
+        self.btn_confirm_loan.pack(side='left')
+        self.btn_cancel_pending = ttk.Button(action_frame, text='Cancelar Empréstimo', command=self.cancel_pending_loan, state='disabled')
+        self.btn_cancel_pending.pack(side='left')
+        
+        self.pending_loan_label = ttk.Label(action_frame, text='')
+        self.pending_loan_label.pack(side='right', padx=8)
+        # seleção
+        self.tree_items.bind('<<TreeviewSelect>>', self.on_item_select)
 
-        for idx, r in enumerate(reservas):
-            # suportar objetos Reserva ou dicts (robusto para dados mistos)
-            if isinstance(r, dict):
-                item_nome = r.get('item', {}).get('nome', str(r.get('item')))
-                membro_nome = r.get('membro', {}).get('nome', str(r.get('membro')))
-                data_val = r.get('data_reserva') or r.get('dataReserva') or r.get('data')
-                data_str = data_val.strftime('%d/%m/%Y %H:%M') if hasattr(data_val, 'strftime') else str(data_val)
-                status_val = r.get('status', '')
-            else:
-                item_nome = r.item['nome'] if isinstance(r.item, dict) else getattr(r.item, 'nome', str(r.item))
-                membro_nome = getattr(r.membro, 'nome', str(r.membro))
-                data_str = r.data_reserva.strftime('%d/%m/%Y %H:%M') if hasattr(r, 'data_reserva') else str(r.data_reserva)
-                status_val = getattr(r, 'status', '')
+    def build_users_tab(self):
+        frame = self.frame_users
+        search_frame = ttk.Frame(frame)
+        search_frame.pack(fill='x', padx=8, pady=4)
+        tk.Label(search_frame, text='Buscar:').pack(side='left')
+        self.entry_user_search = ttk.Entry(search_frame)
+        self.entry_user_search.pack(side='left', padx=4)
+        self.entry_user_search.bind('<KeyRelease>', lambda e: self.search_users())
+        ttk.Button(search_frame, text='Pesquisar', command=self.search_users).pack(side='left', padx=4)
 
-            tree.insert('', 'end', iid=str(idx), values=(membro_nome, item_nome, data_str, str(status_val).upper()))
+        cols = ('id', 'nome', 'email', 'cpf', 'tipo')
+        self.tree_users = ttk.Treeview(frame, columns=cols, show='headings')
+        for c in cols:
+            self.tree_users.heading(c, text=c.title())
+        self.tree_users.pack(fill='both', expand=True, padx=8, pady=4)
+        self.details_user_label = ttk.Label(frame, text='', anchor='w')
+        self.details_user_label.pack(fill='x', padx=8)
 
-        tree.pack(fill='both', expand=True)
+        action_frame = ttk.Frame(frame)
+        action_frame.pack(fill='x', padx=8, pady=4)
+        ttk.Button(action_frame, text='Adicionar Usuário', command=self.add_user_window).pack(side='left')
+        self.btn_edit_user = ttk.Button(action_frame, text='Editar Usuário', command=self.edit_user_window, state='disabled')
+        self.btn_edit_user.pack(side='left')
+        self.btn_remove_user = ttk.Button(action_frame, text='Remover Usuário', command=self.remove_user, state='disabled')
+        self.btn_remove_user.pack(side='left')
+        self.btn_emprestar_user = ttk.Button(action_frame, text='Emprestar', command=self.start_loan_for_user, state='disabled')
+        self.btn_emprestar_user.pack(side='left')
+        self.tree_users.bind('<<TreeviewSelect>>', self.on_user_select)
 
-        # Ação cancelar reserva
-        def cancelar_reserva():
-            sel = tree.selection()
-            if not sel:
-                messagebox.showerror('Erro', 'Selecione uma reserva para cancelar')
-                return
-            idx = int(sel[0])
-            reserva = reservas[idx]
-            # obter status de forma segura
-            status_val = getattr(reserva, 'status', None) if not isinstance(reserva, dict) else reserva.get('status')
-            if status_val != 'aguardando':
-                messagebox.showinfo('Info', 'Reserva não está em estado aguardando')
-                return
-            # cancelar dependendo do tipo
-            if isinstance(reserva, dict):
-                # marcar como cancelada no dicionário
-                reserva['status'] = 'cancelada'
-                reserva['data_cancelamento'] = datetime.now()
-            else:
-                reserva.cancelar()
-            messagebox.showinfo('Cancelada', 'Reserva cancelada com sucesso')
-            self.mostrar_reservas()
+    def build_loans_tab(self):
+        frame = self.frame_loans
+        cols = ('id', 'item', 'membro', 'data_emp', 'data_prev', 'renovacoes', 'status', 'multa')
+        self.tree_loans = ttk.Treeview(frame, columns=cols, show='headings')
+        for c in cols:
+            self.tree_loans.heading(c, text=c.title())
+        self.tree_loans.pack(fill='both', expand=True, padx=8, pady=4)
+    
+        self.tree_loans.tag_configure('multado', background='#ffe6e6')
+        self.tree_loans.tag_configure('odd', background='#ffffff')
+        self.tree_loans.tag_configure('even', background='#f6f6f6')
 
-        tk.Button(card_lista, text='✖ Cancelar Reserva', font=('Arial', 11), bg=self.cores['danger'], fg='white', cursor='hand2', command=cancelar_reserva).pack(pady=8)
+        action_frame = ttk.Frame(frame)
+        action_frame.pack(fill='x', padx=8, pady=4)
+        self.btn_renew = ttk.Button(action_frame, text='Renovar', command=self.renew_loan, state='disabled')
+        self.btn_renew.pack(side='left')
+        self.btn_return = ttk.Button(action_frame, text='Devolver', command=self.return_loan, state='disabled')
+        self.btn_return.pack(side='left')
+        self.btn_payfine = ttk.Button(action_frame, text='Quitar Multa', command=self.pay_fine, state='disabled')
+        self.btn_payfine.pack(side='left')
+        self.btn_imposefine = ttk.Button(action_frame, text='Multar', command=self.impose_fine, state='disabled')
+        self.btn_imposefine.pack(side='left')
+        self.tree_loans.bind('<<TreeviewSelect>>', self.on_loan_select)
 
-    def mostrar_meus_emprestimos(self):
-        """Mostrar empréstimos do membro logado"""
-        self.limpar_content()
+    def build_reservations_tab(self):
+        frame = self.frame_reservations
+        cols = ('id', 'item', 'membro', 'data_res', 'status', 'posicao')
+        self.tree_res = ttk.Treeview(frame, columns=cols, show='headings')
+        for c in cols:
+            self.tree_res.heading(c, text=c.title())
+        self.tree_res.pack(fill='both', expand=True, padx=8, pady=4)
 
-        tk.Label(
-            self.content_frame,
-            text="Meus Empréstimos",
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
+        action_frame = ttk.Frame(frame)
+        action_frame.pack(fill='x', padx=8, pady=4)
+        ttk.Button(action_frame, text='Reservar Item', command=self.reserve_item_window).pack(side='left')
+        ttk.Button(action_frame, text='Cancelar Reserva', command=self.cancel_reservation).pack(side='left')
+        ttk.Button(action_frame, text='Finalizar Reserva', command=self.finish_reservation).pack(side='left')
 
-        card_lista = self.criar_card(self.content_frame, "Empréstimos Ativos")
+    # aba Registrar Empréstimo
+    def strip_accents(self, s: str) -> str:
+        if not s:
+            return ''
+        nk = unicodedata.normalize('NFKD', s)
+        return ''.join(c for c in nk if not unicodedata.combining(c)).lower()
 
-        table_frame = tk.Frame(card_lista, bg='white')
-        table_frame.pack(fill='both', expand=True, padx=20, pady=10)
+    def build_register_tab(self):
+        f = self.frame_register
 
-        tree = ttk.Treeview(
-            table_frame,
-            columns=('Item', 'Data Empréstimo', 'Data Prevista', 'Status', 'Renovações'),
-            show='headings',
-            height=10
-        )
+        paned = ttk.PanedWindow(f, orient='horizontal')
+        paned.pack(fill='both', expand=True, padx=6, pady=6)
 
-        for col in ['Item', 'Data Empréstimo', 'Data Prevista', 'Status', 'Renovações']:
-            tree.heading(col, text=col)
-            tree.column(col, width=200)
+ 
+        left = ttk.Frame(paned)
+        paned.add(left, weight=1)
+        search_u = ttk.Frame(left)
+        search_u.pack(fill='x', padx=6, pady=4)
+        ttk.Label(search_u, text='Buscar usuário:').pack(side='left')
+        self.entry_reg_user_search = ttk.Entry(search_u)
+        self.entry_reg_user_search.pack(side='left', padx=4, fill='x', expand=True)
+        self.entry_reg_user_search.bind('<KeyRelease>', lambda e: self.refresh_register_users())
 
-        meus_emprestimos = [e for e in self.biblioteca.emprestimos if self._dig(e, 'membro', 'id') == self.usuario_logado.id and self._dig(e, 'status') == 'ativo']
+        cols_u = ('id', 'nome', 'email', 'cpf')
+        self.tree_reg_users = ttk.Treeview(left, columns=cols_u, show='headings')
+        for c in cols_u:
+            self.tree_reg_users.heading(c, text=c.title())
+        self.tree_reg_users.pack(fill='both', expand=True, padx=6, pady=4)
+        self.tree_reg_users.bind('<<TreeviewSelect>>', self.on_register_user_select)
 
-        for emp in meus_emprestimos:
-            if isinstance(emp, dict):
-                item_nome = emp.get('item', {}).get('nome', '')
-                data_emp = emp.get('dataEmprestimo')
-                data_prev = emp.get('dataPrevista')
-                status_text = str(emp.get('status', '')).upper()
-                renov = emp.get('renovacoes', 0)
-                data_emp_str = data_emp.strftime('%d/%m/%Y') if hasattr(data_emp, 'strftime') else str(data_emp)
-                data_prev_str = data_prev.strftime('%d/%m/%Y') if hasattr(data_prev, 'strftime') else str(data_prev)
-            else:
-                item_val = getattr(emp, 'item', None)
-                item_nome = item_val.get('nome') if isinstance(item_val, dict) else getattr(item_val, 'nome', '')
-                data_emp = getattr(emp, 'data_emprestimo', getattr(emp, 'dataEmprestimo', None))
-                data_prev = getattr(emp, 'data_prevista_devolucao', getattr(emp, 'dataPrevista', None))
-                data_emp_str = data_emp.strftime('%d/%m/%Y') if hasattr(data_emp, 'strftime') else str(data_emp)
-                data_prev_str = data_prev.strftime('%d/%m/%Y') if hasattr(data_prev, 'strftime') else str(data_prev)
-                status_text = str(getattr(emp, 'status', '')).upper()
-                renov = getattr(emp, '_quantidade_renovacoes', getattr(emp, 'renovacoes', 0))
+        # painel catálogo
+        right = ttk.Frame(paned)
+        paned.add(right, weight=1)
+        search_i = ttk.Frame(right)
+        search_i.pack(fill='x', padx=6, pady=4)
+        ttk.Label(search_i, text='Buscar item:').pack(side='left')
+        self.entry_reg_item_search = ttk.Entry(search_i)
+        self.entry_reg_item_search.pack(side='left', padx=4, fill='x', expand=True)
+        self.entry_reg_item_search.bind('<KeyRelease>', lambda e: self.refresh_register_items())
 
-            tree.insert('', 'end', values=(
-                item_nome,
-                data_emp_str,
-                data_prev_str,
-                status_text,
-                f"{renov}/{self.config['LIMITE_RENOVACOES']}"
-            ))
+        cols_i = ('id', 'nome', 'autor', 'categoria', 'emprestavel')
+        self.tree_reg_items = ttk.Treeview(right, columns=cols_i, show='headings')
+        for c in cols_i:
+            self.tree_reg_items.heading(c, text=c.title())
+        self.tree_reg_items.pack(fill='both', expand=True, padx=6, pady=4)
+        self.tree_reg_items.bind('<<TreeviewSelect>>', self.on_register_item_select)
 
-        tree.pack(fill='both', expand=True)
+        # rodapé com confirmação
+        footer = ttk.Frame(f)
+        footer.pack(fill='x', padx=6, pady=6)
+        self.lbl_reg_selected = ttk.Label(footer, text='Nenhum usuário/item selecionado')
+        self.lbl_reg_selected.pack(side='left')
+        self.btn_confirm_register = ttk.Button(footer, text='Confirmar Empréstimo', command=self.confirm_register_loan, state='disabled')
+        self.btn_confirm_register.pack(side='right')
 
-    def mostrar_multas(self):
-        """Gerenciar multas"""
-        self.limpar_content()
+        self.refresh_register_users()
+        self.refresh_register_items()
 
-        tk.Label(
-            self.content_frame,
-            text="Multas",
-            font=("Arial", 24, "bold"),
-            bg='#f8f9fa',
-            fg=self.cores['primary']
-        ).pack(pady=20, padx=30, anchor='w')
+    def refresh_register_users(self):
+        q = self.entry_reg_user_search.get() if hasattr(self, 'entry_reg_user_search') else ''
+        qn = self.strip_accents(q)
+        for r in self.tree_reg_users.get_children():
+            self.tree_reg_users.delete(r)
+        users = [u for u in self.library.usuarios if u.__class__.__name__ == 'Membro']
+        for u in users:
+            txt = f"{u.nome} {u.email} {u.cpf}"
+            if qn and qn not in self.strip_accents(txt):
+                continue
+            uid = str(u.id)
+            self.tree_reg_users.insert('', 'end', uid, values=(uid, u.nome, u.email, u.cpf))
 
-        card_lista = self.criar_card(self.content_frame, "Multas Pendentes")
+    def refresh_register_items(self):
+        q = self.entry_reg_item_search.get() if hasattr(self, 'entry_reg_item_search') else ''
+        qn = self.strip_accents(q)
+        for r in self.tree_reg_items.get_children():
+            self.tree_reg_items.delete(r)
+        for it in self.library.itens:
+            txt = f"{it.nome} {getattr(it, 'autor', '')} {getattr(it, 'categoria', '')}"
+            if qn and qn not in self.strip_accents(txt):
+                continue
+            iid = str(it.id)
+            emprest = 'Sim' if getattr(it, 'emprestavel', True) else 'Não'
+            self.tree_reg_items.insert('', 'end', iid, values=(iid, it.nome, getattr(it, 'autor', ''), getattr(it, 'categoria', ''), emprest))
 
-        tk.Label(
-            card_lista,
-            text="Nenhuma multa registrada no momento",
-            font=("Arial", 12),
-            bg='white',
-            fg='#7f8c8d'
-        ).pack(pady=50)
+    def on_register_user_select(self, event=None):
+        sel = self.tree_reg_users.selection()
+        self.update_register_footer()
 
-    def criar_card(self, parent, titulo):
-        """Criar card com título"""
-        card = tk.Frame(parent, bg='white', relief='raised', bd=1)
-        card.pack(fill='both', expand=True, padx=30, pady=10)
+    def on_register_item_select(self, event=None):
+        sel = self.tree_reg_items.selection()
+        self.update_register_footer()
 
-        # Título do card
-        tk.Label(
-            card,
-            text=titulo,
-            font=("Arial", 14, "bold"),
-            bg='white',
-            fg=self.cores['dark']
-        ).pack(pady=15, padx=20, anchor='w')
+    def update_register_footer(self):
+        u_sel = self.tree_reg_users.selection()
+        i_sel = self.tree_reg_items.selection()
+        if u_sel and i_sel:
+            u = self.library.usuarios[int(u_sel[0]) - 1] if False else None
 
-        return card
-
-    def limpar_content(self):
-        """Limpar área de conteúdo"""
-        for widget in self.content_frame.winfo_children():
-            widget.destroy()
-
-    def limpar_tela(self):
-        """Limpar toda a tela"""
-        for widget in self.winfo_children():
-            widget.destroy()
-
-    def logout(self):
-        """Fazer logout"""
-        if messagebox.askyesno("Sair", "Deseja realmente sair do sistema?"):
-            self.usuario_logado = None
-            
-            # Remover arquivo de sessão
+        user_text = '---'
+        item_text = '---'
+        if u_sel:
             try:
-                if self.session_file.exists():
-                    self.session_file.unlink()
-            except Exception as e:
-                print(f"Erro ao remover sessão: {e}")
-                
-            self.criar_tela_login()
+                uid = u_sel[0]
+                user = next((x for x in self.library.usuarios if str(x.id) == uid), None)
+                if user:
+                    user_text = user.nome
+            except Exception:
+                pass
+        if i_sel:
+            try:
+                iid = i_sel[0]
+                item = next((x for x in self.library.itens if str(x.id) == iid), None)
+                if item:
+                    item_text = item.nome
+            except Exception:
+                pass
+        self.lbl_reg_selected.config(text=f'Usuário: {user_text}  |  Item: {item_text}')
+        
+        enabled = False
+        if u_sel and i_sel:
+            uid = u_sel[0]; iid = i_sel[0]
+            user = next((x for x in self.library.usuarios if str(x.id) == uid), None)
+            item = next((x for x in self.library.itens if str(x.id) == iid), None)
+            if user and item and getattr(item, 'emprestavel', True) and user.__class__.__name__ == 'Membro':
+                enabled = True
+        self.btn_confirm_register.config(state='normal' if enabled else 'disabled')
 
-if __name__ == "__main__":
-    app = SistemaBiblioteca()
+    def confirm_register_loan(self):
+        u_sel = self.tree_reg_users.selection()
+        i_sel = self.tree_reg_items.selection()
+        if not (u_sel and i_sel):
+            messagebox.showinfo('Info', 'Selecione usuário e item para registrar o empréstimo')
+            return
+        uid = u_sel[0]; iid = i_sel[0]
+        user = next((x for x in self.library.usuarios if str(x.id) == uid), None)
+        item = next((x for x in self.library.itens if str(x.id) == iid), None)
+        if not user or not item:
+            messagebox.showerror('Erro', 'Seleção inválida')
+            return
+        try:
+            self.library.emprestar_item(item, user)
+        except Exception as ex:
+            messagebox.showerror('Erro', str(ex))
+            return
+        self.set_status(f'Empréstimo registrado: {user.nome} → {item.nome}', 4000)
+        self.refresh_all()
+
+    # operações leitura
+    def refresh_items(self, filter_text=''):
+        for row in self.tree_items.get_children():
+            self.tree_items.delete(row)
+        self.items_map.clear()
+        for it in self.library.itens:
+            if filter_text and filter_text.lower() not in it.nome.lower():
+                continue
+            iid = str(it.id)
+            self.items_map[iid] = it
+            self.tree_items.insert('', 'end', iid, values=(iid, it.nome, it.autor, it.isbn, it.categoria, it.num_paginas, 'Sim' if it.emprestavel else 'Não'))
+        # atualizar seleção/estado dos botões
+        self.on_item_select()
+
+    def refresh_users(self, filter_text=''):
+        for row in self.tree_users.get_children():
+            self.tree_users.delete(row)
+        self.users_map.clear()
+        for u in self.library.usuarios:
+            if filter_text and filter_text.lower() not in u.nome.lower():
+                continue
+            uid = str(u.id)
+            self.users_map[uid] = u
+            tipo = u.__class__.__name__
+            self.tree_users.insert('', 'end', uid, values=(uid, u.nome, u.email, u.cpf, tipo))
+        self.on_user_select()
+
+    def refresh_loans(self):
+        for row in self.tree_loans.get_children():
+            self.tree_loans.delete(row)
+        self.loans_map.clear()
+        i = 0
+        for e in self.library.emprestimos:
+            iid = str(e.id)
+            self.loans_map[iid] = e
+            multa = f"{e.multa.valor:.2f}" if e.multa else ''
+            # tags: multado tem prioridade
+            tags = []
+            if e.status == 'multado':
+                tags.append('multado')
+            else:
+                tags.append('even' if i % 2 == 0 else 'odd')
+
+            self.tree_loans.insert('', 'end', iid, values=(iid, e.item.nome, e.membro.nome, e.data_emprestimo.strftime('%d/%m/%Y'), e.data_prevista_devolucao.strftime('%d/%m/%Y'), getattr(e, '_quantidade_renovacoes', 0), e.status, multa), tags=tags)
+            i += 1
+        self.on_loan_select()
+
+    def refresh_reservations(self):
+        for row in self.tree_res.get_children():
+            self.tree_res.delete(row)
+        self.reservations_map.clear()
+        # ordenar por data
+        reservas = sorted(self.library.reservas, key=lambda r: r.data_reserva)
+        for idx, r in enumerate(reservas):
+            iid = str(r.id)
+            self.reservations_map[iid] = r
+            pos = idx + 1
+            self.tree_res.insert('', 'end', iid, values=(iid, r.item.nome, r.membro.nome, r.data_reserva.strftime('%d/%m/%Y'), r.status, pos))
+
+    def refresh_all(self):
+        self.refresh_items()
+        self.refresh_users()
+        self.refresh_loans()
+        self.refresh_reservations()
+        self.update_pending_loan_ui()
+
+    def set_status(self, msg, timeout=3000):
+        try:
+            self.status_var.set(msg)
+            if timeout:
+                if hasattr(self, '_clear_status_after') and self._clear_status_after:
+                    try:
+                        self.after_cancel(self._clear_status_after)
+                    except Exception:
+                        pass
+                self._clear_status_after = self.after(timeout, lambda: self.status_var.set('Pronto'))
+        except Exception:
+            pass
+
+    def on_item_select(self, event=None):
+        sel = self.tree_items.selection()
+        if not sel:
+            self.details_item_label.config(text='')
+            self.btn_edit_item.config(state='disabled')
+            self.btn_remove_item.config(state='disabled')
+            # confirmar emprestimo só se houver pending member
+            if not self.pending_loan_member:
+                self.btn_confirm_loan.config(state='disabled')
+            return
+        obj = self.items_map[sel[0]]
+        txt = f"{obj.nome} — {obj.autor} | {obj.categoria} | Páginas: {getattr(obj, 'num_paginas', '')}"
+        self.details_item_label.config(text=txt)
+        self.btn_edit_item.config(state='normal')
+        self.btn_remove_item.config(state='normal')
+        # permitir emprestar se houver membro pendente e item emprestavel
+        if self.pending_loan_member and getattr(obj, 'emprestavel', True):
+            self.btn_confirm_loan.config(state='normal')
+        else:
+            self.btn_confirm_loan.config(state='disabled')
+
+    def on_user_select(self, event=None):
+        sel = self.tree_users.selection()
+        if not sel:
+            self.details_user_label.config(text='')
+            self.btn_edit_user.config(state='disabled')
+            self.btn_remove_user.config(state='disabled')
+            self.btn_emprestar_user.config(state='disabled')
+            return
+        u = self.users_map[sel[0]]
+        tipo = u.__class__.__name__
+        txt = f"{u.nome} — {u.email} | CPF: {u.cpf} | Tipo: {tipo}"
+        self.details_user_label.config(text=txt)
+        self.btn_edit_user.config(state='normal')
+        self.btn_remove_user.config(state='normal')
+        # emprestar habilitado apenas para membros
+        if isinstance(u, Membro):
+            self.btn_emprestar_user.config(state='normal')
+        else:
+            self.btn_emprestar_user.config(state='disabled')
+
+    def on_loan_select(self, event=None):
+        sel = self.tree_loans.selection()
+        if not sel:
+            self.btn_renew.config(state='disabled')
+            self.btn_return.config(state='disabled')
+            self.btn_payfine.config(state='disabled')
+            self.btn_imposefine.config(state='disabled')
+            return
+        e = self.loans_map[sel[0]]
+  
+        if e.status in ('ativo', 'emprestado'):
+            self.btn_renew.config(state='normal')
+            self.btn_return.config(state='normal')
+        else:
+            self.btn_renew.config(state='disabled')
+            self.btn_return.config(state='disabled')
+        if e.multa and not getattr(e.multa, 'paga', False):
+            self.btn_payfine.config(state='normal')
+        else:
+            self.btn_payfine.config(state='disabled')
+        # sempre permitir multar manualmente para ajuste
+        self.btn_imposefine.config(state='normal')
+
+    # ações de formulários
+    def search_items(self):
+        self.refresh_items(self.entry_item_search.get())
+
+    def add_item_window(self):
+        def save():
+            nome = en_nome.get()
+            autor = en_autor.get()
+            isbn = en_isbn.get()
+            categoria = en_categoria.get()
+            try:
+                paginas = int(en_paginas.get())
+            except ValueError:
+                paginas = 0
+            # validações
+            if not self.is_valid_name(nome):
+                messagebox.showerror('Erro', 'Nome do livro inválido. Não utilize números ou símbolos estranhos.')
+                return
+            if autor and not self.is_valid_name(autor):
+                messagebox.showerror('Erro', 'Nome do autor inválido.')
+                return
+            if isbn and not self.is_valid_isbn(isbn):
+                messagebox.showerror('Erro', 'ISBN inválido. Informe 10 ou 13 dígitos (apenas números).')
+                return
+            if paginas <= 0:
+                messagebox.showerror('Erro', 'Número de páginas deve ser maior que zero.')
+                return
+            tipo = tipo_var.get()
+            if tipo == 'Livro':
+                obj = Livro(nome, '', '', autor, paginas, isbn, categoria)
+            else:
+                url = en_url.get()
+                obj = Ebook(nome, '', '', autor, paginas, isbn, categoria, '', url)
+            self.library.adicionar_item(obj)
+            top.destroy()
+            self.refresh_items()
+
+        top = tk.Toplevel(self)
+        top.title('Adicionar Item')
+        tk.Label(top, text='Nome').pack(); en_nome = ttk.Entry(top); en_nome.pack()
+        tk.Label(top, text='Autor').pack(); en_autor = ttk.Entry(top); en_autor.pack()
+        tk.Label(top, text='ISBN').pack(); en_isbn = ttk.Entry(top); en_isbn.pack()
+        tk.Label(top, text='Categoria').pack(); en_categoria = ttk.Entry(top); en_categoria.pack()
+        tk.Label(top, text='Páginas').pack(); en_paginas = ttk.Entry(top); en_paginas.pack()
+        tipo_var = tk.StringVar(value='Livro')
+        ttk.Radiobutton(top, text='Livro', variable=tipo_var, value='Livro').pack()
+        ttk.Radiobutton(top, text='Ebook', variable=tipo_var, value='Ebook').pack()
+        tk.Label(top, text='URL (Ebook)').pack(); en_url = ttk.Entry(top); en_url.pack()
+        ttk.Button(top, text='Salvar', command=save).pack()
+
+    def edit_item_window(self):
+        sel = self.tree_items.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um item para editar')
+            return
+        obj = self.items_map[sel[0]]
+
+        def save():
+            obj.nome = en_nome.get()
+            obj.autor = en_autor.get()
+            obj.isbn = en_isbn.get()
+            obj.categoria = en_categoria.get()
+            try:
+                obj.num_paginas = int(en_paginas.get())
+            except ValueError:
+                pass
+            # validações
+            if not self.is_valid_name(obj.nome):
+                messagebox.showerror('Erro', 'Nome do livro inválido. Não utilize números ou símbolos estranhos.')
+                return
+            if obj.autor and not self.is_valid_name(obj.autor):
+                messagebox.showerror('Erro', 'Nome do autor inválido.')
+                return
+            if obj.isbn and not self.is_valid_isbn(obj.isbn):
+                messagebox.showerror('Erro', 'ISBN inválido. Informe 10 ou 13 dígitos (apenas números).')
+                return
+            top.destroy(); self.refresh_items()
+
+        top = tk.Toplevel(self)
+        top.title('Editar Item')
+        tk.Label(top, text='Nome').pack(); en_nome = ttk.Entry(top); en_nome.insert(0, obj.nome); en_nome.pack()
+        tk.Label(top, text='Autor').pack(); en_autor = ttk.Entry(top); en_autor.insert(0, obj.autor); en_autor.pack()
+        tk.Label(top, text='ISBN').pack(); en_isbn = ttk.Entry(top); en_isbn.insert(0, obj.isbn); en_isbn.pack()
+        tk.Label(top, text='Categoria').pack(); en_categoria = ttk.Entry(top); en_categoria.insert(0, obj.categoria); en_categoria.pack()
+        tk.Label(top, text='Páginas').pack(); en_paginas = ttk.Entry(top); en_paginas.insert(0, obj.num_paginas); en_paginas.pack()
+        ttk.Button(top, text='Salvar', command=save).pack()
+
+    # validação de campos
+    def clean_digits(self, s: str) -> str:
+        return ''.join(ch for ch in s if ch.isdigit())
+
+    def is_valid_cpf(self, s: str) -> bool:
+        if not s:
+            return False
+        nums = self.clean_digits(s)
+        return len(nums) == 11
+
+    def is_valid_name(self, s: str) -> bool:
+        if not s:
+            return False
+        # permitir letras (incluindo acentos), espaços, hífens e apóstrofo
+        for ch in s:
+            if ch.isalpha() or ch.isspace() or ch in "-'":
+                continue
+            return False
+        return True
+
+    def is_valid_email(self, s: str) -> bool:
+        if not s:
+            return False
+        # validação simples
+        pattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$'
+        return re.match(pattern, s) is not None
+
+    def is_valid_isbn(self, s: str) -> bool:
+        if not s:
+            return False
+        nums = self.clean_digits(s)
+        return len(nums) in (10, 13)
+
+    def remove_item(self):
+        sel = self.tree_items.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um item para remover')
+            return
+        iid = sel[0]
+        try:
+            self.library.remover_item(self.items_map[iid].id)
+        except Exception as e:
+            messagebox.showerror('Erro', str(e)); return
+        self.refresh_items()
+        self.set_status('Item removido', 3000)
+
+    # usuários
+    def search_users(self):
+        self.refresh_users(self.entry_user_search.get())
+
+    def start_loan_for_user(self):
+        sel = self.tree_users.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um usuário para iniciar empréstimo'); return
+        user = self.users_map[sel[0]]
+        # Apenas membros podem emprestar
+        if not isinstance(user, Membro):
+            messagebox.showerror('Erro', 'Apenas membros podem emprestar itens'); return
+
+        self.pending_loan_member = user
+        # ir para aba catálogo
+        try:
+            self.notebook.select(self.frame_items)
+        except Exception:
+            pass
+        self.update_pending_loan_ui()
+
+    def confirm_loan_for_pending(self):
+        if not self.pending_loan_member:
+            messagebox.showinfo('Info', 'Nenhum empréstimo pendente'); return
+        sel = self.tree_items.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um item para emprestar'); return
+        item = self.items_map[sel[0]]
+        try:
+            self.library.emprestar_item(item, self.pending_loan_member)
+        except Exception as ex:
+            messagebox.showerror('Erro', str(ex)); return
+        messagebox.showinfo('OK', f'Empréstimo registrado para {self.pending_loan_member.nome}')
+        self.set_status(f'Empréstimo registrado para {self.pending_loan_member.nome}', 4000)
+        self.pending_loan_member = None
+        self.refresh_all()
+
+    def cancel_pending_loan(self):
+        if not self.pending_loan_member:
+            return
+        self.pending_loan_member = None
+        self.update_pending_loan_ui()
+
+    def update_pending_loan_ui(self):
+        if self.pending_loan_member:
+            self.pending_loan_label.config(text=f'Emprestando para: {self.pending_loan_member.nome}')
+            self.btn_confirm_loan.config(state='normal')
+            self.btn_cancel_pending.config(state='normal')
+        else:
+            self.pending_loan_label.config(text='')
+            self.btn_confirm_loan.config(state='disabled')
+            self.btn_cancel_pending.config(state='disabled')
+
+    def add_user_window(self):
+        def save():
+            nome = en_nome.get(); email = en_email.get(); senha = en_senha.get(); cpf = en_cpf.get(); tipo = tipo_cb.get()
+            # campos obrigatórios
+            if not nome or not email or not cpf:
+                messagebox.showerror('Erro', 'Nome, Email e CPF são obrigatórios'); return
+            # validações
+            if not self.is_valid_name(nome):
+                messagebox.showerror('Erro', 'Nome inválido. Não utilize números ou símbolos.')
+                return
+            if not self.is_valid_email(email):
+                messagebox.showerror('Erro', 'Email inválido.')
+                return
+            if not self.is_valid_cpf(cpf):
+                messagebox.showerror('Erro', 'CPF inválido. Deve conter 11 dígitos numéricos.')
+                return
+            self.library.adicionar_usuario(nome, email, senha, cpf, tipo)
+            top.destroy(); self.refresh_users()
+            self.set_status('Usuário adicionado', 3000)
+            self.set_status('Usuário adicionado', 3000)
+
+        top = tk.Toplevel(self)
+        top.title('Adicionar Usuário')
+        tk.Label(top, text='Nome').pack(); en_nome = ttk.Entry(top); en_nome.pack()
+        tk.Label(top, text='Email').pack(); en_email = ttk.Entry(top); en_email.pack()
+        tk.Label(top, text='Senha').pack(); en_senha = ttk.Entry(top, show='*'); en_senha.pack()
+        tk.Label(top, text='CPF').pack(); en_cpf = ttk.Entry(top); en_cpf.pack()
+        tk.Label(top, text='Tipo').pack(); tipo_cb = ttk.Combobox(top, values=['membro', 'bibliotecario', 'administrador']); tipo_cb.set('membro'); tipo_cb.pack()
+        ttk.Button(top, text='Salvar', command=save).pack()
+
+    def edit_user_window(self):
+        sel = self.tree_users.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um usuário para editar'); return
+        obj = self.users_map[sel[0]]
+
+        def save():
+            nome = en_nome.get(); email = en_email.get(); cpf = en_cpf.get()
+            # validações
+            if not self.is_valid_name(nome):
+                messagebox.showerror('Erro', 'Nome inválido. Não utilize números ou símbolos.')
+                return
+            if not self.is_valid_email(email):
+                messagebox.showerror('Erro', 'Email inválido.')
+                return
+            if not self.is_valid_cpf(cpf):
+                messagebox.showerror('Erro', 'CPF inválido. Deve conter 11 dígitos numéricos.')
+                return
+            obj.nome = nome; obj.email = email; obj.cpf = cpf
+            top.destroy(); self.refresh_users()
+
+        top = tk.Toplevel(self)
+        top.title('Editar Usuário')
+        tk.Label(top, text='Nome').pack(); en_nome = ttk.Entry(top); en_nome.insert(0, obj.nome); en_nome.pack()
+        tk.Label(top, text='Email').pack(); en_email = ttk.Entry(top); en_email.insert(0, obj.email); en_email.pack()
+        tk.Label(top, text='CPF').pack(); en_cpf = ttk.Entry(top); en_cpf.insert(0, obj.cpf); en_cpf.pack()
+        ttk.Button(top, text='Salvar', command=save).pack()
+
+    def remove_user(self):
+        sel = self.tree_users.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um usuário para remover'); return
+        try:
+            self.library.remover_usuario(self.users_map[sel[0]].id)
+        except Exception as e:
+            messagebox.showerror('Erro', str(e)); return
+        self.refresh_users()
+        self.set_status('Usuário removido', 3000)
+
+    # ---------- empréstimos ----------
+    def register_loan_window(self):
+        def save():
+            item = available_items[item_var.get()]
+            membro = members[mem_var.get()]
+            try:
+                self.library.emprestar_item(item, membro)
+            except Exception as e:
+                messagebox.showerror('Erro', str(e)); return
+            top.destroy(); self.refresh_all()
+
+        # construir lista simples
+        available_items = {f'{i.nome} ({i.id})': i for i in self.library.itens}
+        members = {f'{u.nome} ({u.id})': u for u in self.library.usuarios if u.__class__.__name__ == 'Membro'}
+        top = tk.Toplevel(self)
+        top.title('Registrar Empréstimo')
+        tk.Label(top, text='Item').pack(); item_var = tk.StringVar(); ttk.Combobox(top, values=list(available_items.keys()), textvariable=item_var).pack()
+        tk.Label(top, text='Membro').pack(); mem_var = tk.StringVar(); ttk.Combobox(top, values=list(members.keys()), textvariable=mem_var).pack()
+        ttk.Button(top, text='Confirmar', command=save).pack()
+
+    def renew_loan(self):
+        sel = self.tree_loans.selection();
+        if not sel: messagebox.showinfo('Info', 'Selecione um empréstimo'); return
+        e = self.loans_map[sel[0]]
+        try:
+            e.renovar(); self.refresh_loans(); messagebox.showinfo('OK', 'Empréstimo renovado')
+        except Exception as ex:
+            messagebox.showerror('Erro', str(ex))
+
+    def return_loan(self):
+        sel = self.tree_loans.selection()
+        if not sel: messagebox.showinfo('Info', 'Selecione um empréstimo'); return
+        e = self.loans_map[sel[0]]
+        try:
+            e.devolver(); self.refresh_loans(); self.refresh_reservations(); messagebox.showinfo('OK', 'Devolução processada')
+        except Exception as ex:
+            messagebox.showerror('Erro', str(ex))
+
+    def pay_fine(self):
+        sel = self.tree_loans.selection()
+        if not sel: messagebox.showinfo('Info', 'Selecione um empréstimo'); return
+        e = self.loans_map[sel[0]]
+        try:
+            e.quitar_divida(); self.refresh_loans(); messagebox.showinfo('OK', 'Multa quitada')
+        except Exception as ex:
+            messagebox.showerror('Erro', str(ex))
+        else:
+            self.set_status('Multa quitada', 3000)
+
+    def impose_fine(self):
+        sel = self.tree_loans.selection()
+        if not sel:
+            messagebox.showinfo('Info', 'Selecione um empréstimo para multar')
+            return
+        e = self.loans_map[sel[0]]
+
+        # Confirmar se já existe multa
+        if e.multa and not messagebox.askyesno('Confirmar', 'Empréstimo já possui multa. Deseja sobrescrever?'):
+            return
+
+        # Pergunta dias de atraso (calcula multa por dia)
+        dias = simpledialog.askinteger('Dias de atraso', 'Informe o número de dias de atraso (aprox.)', minvalue=1)
+        if dias is None:
+            return
+
+        valor = MULTA_POR_DIA * dias
+
+        # Criar multa manualmente
+        e._multa = Multa(valor, False)
+        e._status = 'multado'
+        messagebox.showinfo('OK', f'Multa aplicada: R$ {valor:.2f}')
+        self.refresh_loans()
+        self.set_status(f'Multa aplicada: R$ {valor:.2f}', 4000)
+
+    # ---------- reservas ----------
+    def reserve_item_window(self):
+        def save():
+            item = items_map[item_var.get()]
+            membro = members[mem_var.get()]
+            try:
+                self.library.reservar_item(item, membro)
+            except Exception as e:
+                messagebox.showerror('Erro', str(e)); return
+            top.destroy(); self.refresh_reservations()
+            self.set_status('Reserva criada', 3000)
+
+        items_map = {f'{i.nome} ({i.id})': i for i in self.library.itens}
+        members = {f'{u.nome} ({u.id})': u for u in self.library.usuarios if u.__class__.__name__ == 'Membro'}
+        top = tk.Toplevel(self)
+        top.title('Reservar Item')
+        tk.Label(top, text='Item').pack(); item_var = tk.StringVar(); ttk.Combobox(top, values=list(items_map.keys()), textvariable=item_var).pack()
+        tk.Label(top, text='Membro').pack(); mem_var = tk.StringVar(); ttk.Combobox(top, values=list(members.keys()), textvariable=mem_var).pack()
+        ttk.Button(top, text='Confirmar', command=save).pack()
+
+    def cancel_reservation(self):
+        sel = self.tree_res.selection()
+        if not sel: messagebox.showinfo('Info', 'Selecione uma reserva'); return
+        r = self.reservations_map[sel[0]]
+        try:
+            r.cancelar(); self.refresh_reservations(); messagebox.showinfo('OK', 'Reserva cancelada')
+        except Exception as ex:
+            messagebox.showerror('Erro', str(ex))
+        else:
+            self.set_status('Reserva cancelada', 3000)
+
+    def finish_reservation(self):
+        sel = self.tree_res.selection()
+        if not sel: messagebox.showinfo('Info', 'Selecione uma reserva'); return
+        r = self.reservations_map[sel[0]]
+        try:
+            # marcar como finalizada e criar empréstimo a partir da reserva
+            r.marcar_como_finalizada()
+            # Nota: biblioteca.Emprestimo.de_reserva permite criar empréstimo
+            # cria o empréstimo a partir da reserva
+            novo = Emprestimo.de_reserva(r)
+            self.library.emprestimos.append(novo)
+        except Exception as ex:
+            # fallback simples: apenas finalizar
+            messagebox.showerror('Erro', str(ex))
+        finally:
+            self.refresh_reservations(); self.refresh_loans()
+            self.set_status('Reserva finalizada e empréstimo criado', 4000)
+
+
+if __name__ == '__main__':
+    app = App()
     app.mainloop()

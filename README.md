@@ -36,35 +36,34 @@ Essa é uma forma de representar dados de uma biblioteca por meio da classe bibl
 
 
 
-Para utilizar como library basta importar a classe `Biblioteca` e instanciá-la:
+Para utilizar como library basta abrir um novo repositório, importar moledos.biblioteca
 
 ```python
+
 from modelos.biblioteca import Biblioteca
 
 biblioteca = Biblioteca()
 
-# Exemplo: adicionar um usuário
+from modelos.biblioteca import Biblioteca
+
+biblioteca = Biblioteca()
+
 biblioteca.adicionar_usuario('Nome', 'nome@email.com', 'senha', '111.111.111-11', 'membro')
+
 ```
 
-Os métodos públicos mais usados na instância de `Biblioteca` são:
+Os métodos que podem ser utilizados na instância de Biblioteca são:
 
-- `adicionar_usuario(nome, email, senha, cpf, tipo)`: adiciona um usuário;
-- `remover_usuario(id)`: remove um usuário pelo `id`;
-- `adicionar_item(item)`: adiciona um item (recebe um objeto `Livro` ou `Ebook`);
-- `remover_item(id)`: remove um item pelo `id`;
-- `emprestar_item(item, membro)`: registra um empréstimo;
-- `renovar_emprestimo(id_emprestimo)`: renova um empréstimo pelo `id`;
-- `reservar_item(item, membro)`: cria uma reserva para um item emprestado;
-- `registrar_pagamento_multa(id_emprestimo)`: registra pagamento da multa do empréstimo;
-- `registrar_devolucao(id_emprestimo)`: registra a devolução do empréstimo.
+- adicionar_usuario: possui os atributos 'nome', 'email', 'senha', 'cpf' e 'tipo';
+- remover_usuario: possui o atributo 'id';
+- adicionar_item: possui atributo 'id';
+- remover_item: possui o atributo 'id';
+- emprestar_item: possui os atributos 'membro' e 'item';
+- renovar_emprestimo: possui o atributo 'id_emprestimo';
+- reservar_item: possui os atributos 'item' e 'membro';
+- registrar_pagamento_multa: possui o atributo 'id_emprestimo';
+- registar_devolucao: possui o atributo 'id_emprestimo';
 
 ## Utilização com interface gráfica
 
-Para executar a interface gráfica, abra o terminal na pasta do projeto e execute:
-
-```powershell
-python .\run.py
-```
-
-Em sistemas UNIX você pode usar `python3 run.py` quando necessário.
+Para utilizar com intereface gráfica basta abrir o terminal e dar o comando 'python3 run.py'
