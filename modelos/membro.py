@@ -1,4 +1,4 @@
-from modelos.usuario import Usuario
+from .usuario import Usuario
 
 class Membro(Usuario):
     

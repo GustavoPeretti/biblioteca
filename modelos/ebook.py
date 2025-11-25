@@ -1,4 +1,4 @@
-from modelos.item import Item
+from .item import Item
 
 class Ebook(Item):
     def __init__(self, nome, imagem_url, imagem_arquivo, autor, num_paginas, isbn, categoria, arquivo, url):

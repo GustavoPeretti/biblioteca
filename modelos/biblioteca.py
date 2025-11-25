@@ -1,10 +1,13 @@
-from modelos.membro import Membro
-from modelos.administrador import Administrador
-from modelos.bibliotecario import Bibliotecario
-from modelos.emprestimo import Emprestimo
-from modelos.reserva import Reserva
-from config import LIMITE_EMPRESTIMOS_SIMULTANEOS, PRAZO_VALIDADE_RESERVA
+from .membro import Membro
+from .administrador import Administrador
+from .bibliotecario import Bibliotecario
+from .emprestimo import Emprestimo
+from .reserva import Reserva
+from ..config import LIMITE_EMPRESTIMOS_SIMULTANEOS, PRAZO_VALIDADE_RESERVA
 import datetime
+
+def _get_status(obj):
+    return obj.get('status') if isinstance(obj, dict) else getattr(obj, 'status', None)
 
 class Biblioteca:
     def __init__(self):
@@ -12,6 +15,53 @@ class Biblioteca:
         self.usuarios = []
         self.emprestimos = []
         self.reservas = []
+        self._inicializar_dados()
+        
+    def _inicializar_dados(self):
+        # Usuários padrão (usar classes específicas e manter atributo 'tipo' para compatibilidade)
+        admin = Administrador("Admin Sistema", "admin@biblioteca.com", "admin123", "000.000.000-00")
+        admin.tipo = 'administrador'
+        self.usuarios.append(admin)
+
+        bib = Bibliotecario("Maria Silva", "maria@biblioteca.com", "biblio123", "111.111.111-11")
+        bib.tipo = 'bibliotecario'
+        self.usuarios.append(bib)
+
+        membro = Membro("João Santos", "joao@email.com", "senha123", "222.222.222-22")
+        membro.tipo = 'membro'
+        self.usuarios.append(membro)
+
+        # Itens de exemplo
+        self.itens.append({
+            'id': 1,
+            'nome': 'O Senhor dos Anéis',
+            'autor': 'J.R.R. Tolkien',
+            'isbn': '978-8533613379',
+            'categoria': 'Fantasia',
+            'paginas': 1200,
+            'tipo': 'livro',
+            'status': 'disponivel'
+        })
+        self.itens.append({
+            'id': 2,
+            'nome': '1984',
+            'autor': 'George Orwell',
+            'isbn': '978-8535914849',
+            'categoria': 'Ficção Científica',
+            'paginas': 416,
+            'tipo': 'livro',
+            'status': 'disponivel'
+        })
+        self.itens.append({
+            'id': 3,
+            'nome': 'Clean Code',
+            'autor': 'Robert C. Martin',
+            'isbn': '978-0132350884',
+            'categoria': 'Tecnologia',
+            'paginas': 464,
+            'tipo': 'ebook',
+            'status': 'disponivel'
+        })
     
     def adicionar_usuario(self, nome, email, senha, cpf, tipo):
         classe_tipo = {
@@ -20,7 +70,11 @@ class Biblioteca:
             'bibliotecario': Bibliotecario
         }[tipo]
 
-        self.usuarios.append(classe_tipo(nome, email, senha, cpf))
+        usuario = classe_tipo(nome, email, senha, cpf)
+        # manter atributo 'tipo' para compatibilidade com a interface
+        usuario.tipo = tipo
+        self.usuarios.append(usuario)
+        return usuario
         
     def remover_usuario(self, id):
         # Filtro de usuários por ID
@@ -60,9 +114,9 @@ class Biblioteca:
         
         # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
-            [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] # Filtro para encontrar empréstimos ativos do membro
+            [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro]
             +
-            [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro] # Filtro para encontrar reservas ativas do membro
+            [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
         )
 
         # Se ultrapasasar o limite de empréstimos
@@ -70,7 +124,7 @@ class Biblioteca:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
 
         # Obtenção dos empréstimos ativos do item
-        emprestimos_ativos_item = [e for e in self.emprestimos if e.status == 'ativo' and e.item == item]
+        emprestimos_ativos_item = [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'item', None) == item]
 
         # Se há um empréstimo ativo do item, ele não pode ser emprestado
         if emprestimos_ativos_item:
@@ -78,7 +132,7 @@ class Biblioteca:
         
         # Obtenção do último empréstimo
         # Pode ser que não tenha nenhum resultado, um, ou múltiplos
-        filtro_ultimo_emprestimo = [e for e in self.emprestimos if e.status != 'ativo' and e.item == e.item] 
+        filtro_ultimo_emprestimo = [e for e in self.emprestimos if _get_status(e) != 'ativo' and getattr(e, 'item', None) == getattr(e, 'item', None)] 
         
         # Se nunca teve empréstimos, nunca teve reserva. Isso significa que temos informações
         # suficientes para saber que o livro pode ser emprestado
@@ -96,7 +150,7 @@ class Biblioteca:
         data_referencia = emprestimo_mais_recente.data_devolucao
 
         # Filtro para encontrar reservas ativas do item
-        reservas_ativas_item = [r for r in self.reservas if r.status == 'aguardando' and r.item == item]
+        reservas_ativas_item = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
         
         # Atualização do status das reservas expiradas
         for reserva in reservas_ativas_item:
@@ -104,10 +158,15 @@ class Biblioteca:
 
             # Se passou da data de validade
             if datetime.datetime.now() > data_validade_reserva:
-                reserva.status = 'expirada'
+                # suportar objetos Reserva e dicionários
+                if isinstance(reserva, dict):
+                    reserva['status'] = 'expirada'
+                    reserva['data_cancelamento'] = datetime.datetime.now()
+                else:
+                    reserva._status = 'expirada'
 
         # Obtenção das reservas "honestas", com prioridade para retirar
-        reservas_ativas_item = [r for r in reservas_ativas_item if r.status == 'aguardando']
+        reservas_ativas_item = [r for r in reservas_ativas_item if _get_status(r) == 'aguardando']
 
         # Se não há reservas ativas, não há prioridade para verificar
         if not reservas_ativas_item:
@@ -145,12 +204,12 @@ class Biblioteca:
 
     def reservar_item(self, item, membro):
         # Itens disponíveis não podem ser reservados
-        emprestimos_ativos_item = [e for e in self.emprestimos if e.status == 'ativo' and e.item == item]
+        emprestimos_ativos_item = [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'item', None) == item]
         if not emprestimos_ativos_item:
             raise ValueError('Item disponível não pode ser reservado')
 
         # Verificar se o usuário já não tem reserva ativa desse item
-        reservas_ativas_membro_item = [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro and r.item == item]
+        reservas_ativas_membro_item = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro and getattr(r, 'item', None) == item]
         
         if reservas_ativas_membro_item:
             raise ValueError('Você já possui uma reserva ativa deste item')
@@ -161,7 +220,7 @@ class Biblioteca:
         
         # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
-            [e for e in self.emprestimos if e.status == 'ativo' and e.membro == membro] + [r for r in self.reservas if r.status == 'aguardando' and r.membro == membro]
+            [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro] + [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
         )
 
         # Se ultrapasasar o limite de empréstimos
@@ -194,6 +253,17 @@ class Biblioteca:
 
         # Processa a devolução (pode gerar multa internamente)
         emprestimo.devolver()
+
+        # Garantir que o item volte a ficar disponível após a devolução (suporta dicts e objetos)
+        item = getattr(emprestimo, 'item', None)
+        if isinstance(item, dict):
+            item['status'] = 'disponivel'
+        else:
+            # tentar atribuir atributo 'status' se existir ou ignorar
+            try:
+                setattr(item, 'status', 'disponivel')
+            except Exception:
+                pass
 
         # Se a devolução finalizou o empréstimo, verificar reservas e liberar para o primeiro da fila
         if emprestimo.status == 'finalizado':
