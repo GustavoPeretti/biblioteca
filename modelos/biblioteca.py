@@ -1,9 +1,9 @@
-from .membro import Membro
-from .administrador import Administrador
-from .bibliotecario import Bibliotecario
-from .emprestimo import Emprestimo
-from .reserva import Reserva
-from ..config import LIMITE_EMPRESTIMOS_SIMULTANEOS, PRAZO_VALIDADE_RESERVA
+from modelos.membro import Membro
+from modelos.administrador import Administrador
+from modelos.bibliotecario import Bibliotecario
+from modelos.emprestimo import Emprestimo
+from modelos.reserva import Reserva
+from config import LIMITE_EMPRESTIMOS_SIMULTANEOS, PRAZO_VALIDADE_RESERVA
 import datetime
 
 def _get_status(obj):
@@ -112,6 +112,12 @@ class Biblioteca:
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem emprestar itens')
         
+        # Verificar se o membro possui multas pendentes
+        multas_pendentes = [e for e in self.emprestimos if _get_status(e) == 'multado' and getattr(e, 'membro', None) == membro and getattr(getattr(e, 'multa', None), 'paga', True) == False]
+        if multas_pendentes:
+            valor_total = sum(getattr(e.multa, 'valor', 0) for e in multas_pendentes)
+            raise ValueError(f'Membro possui multas pendentes no valor de R$ {valor_total:.2f}. Não é possível fazer novos empréstimos até que as multas sejam quitadas.')
+        
         # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
             [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro]
@@ -218,6 +224,12 @@ class Biblioteca:
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem reservar itens')
         
+        # Verificar se o membro possui multas pendentes
+        multas_pendentes = [e for e in self.emprestimos if _get_status(e) == 'multado' and getattr(e, 'membro', None) == membro and getattr(getattr(e, 'multa', None), 'paga', True) == False]
+        if multas_pendentes:
+            valor_total = sum(getattr(e.multa, 'valor', 0) for e in multas_pendentes)
+            raise ValueError(f'Membro possui multas pendentes no valor de R$ {valor_total:.2f}. Não é possível fazer novas reservas até que as multas sejam quitadas.')
+        
         # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
             [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro] + [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
@@ -265,14 +277,6 @@ class Biblioteca:
             except Exception:
                 pass
 
-        # Se a devolução finalizou o empréstimo, verificar reservas e liberar para o primeiro da fila
-        if emprestimo.status == 'finalizado':
-            reservas_ativas_item = [r for r in self.reservas if r.status == 'aguardando' and r.item == emprestimo.item]
-            if reservas_ativas_item:
-                reservas_ativas_item.sort(key=lambda r: r.data_reserva)
-                primeira = reservas_ativas_item[0]
-                # Marcar reserva como finalizada (prioridade para retirar)
-                primeira.marcar_como_finalizada()
 
         return emprestimo
 

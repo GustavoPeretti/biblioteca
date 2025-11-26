@@ -1,4 +1,4 @@
-from .item import Item
+from modelos.item import Item
 
 class Livro(Item):
      def __str__(self):

@@ -1,4 +1,4 @@
-from .usuario import Usuario
+from modelos.usuario import Usuario
 
 class Bibliotecario(Usuario):
     

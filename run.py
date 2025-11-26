@@ -1,4 +1,4 @@
-from interface.app import App
+from interface.app import SistemaBiblioteca
 
-app = App()
+app = SistemaBiblioteca()
 app.mainloop()
