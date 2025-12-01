@@ -2,13 +2,12 @@ import sqlite3
 from datetime import datetime
 import os
 
-# Define o caminho do banco de dados relativo à raiz do projeto
-# Assumindo que a execução ocorre na raiz (onde está run.py)
+# Define o caminho do banco de dados
 DB_NAME = "biblioteca.db"
 
 def get_connection():
     conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row # Permite acessar colunas por nome
+    conn.row_factory = sqlite3.Row
     return conn
 
 def inicializar_banco():
@@ -38,8 +37,6 @@ def inicializar_banco():
         categoria TEXT,
         paginas INTEGER,
         status TEXT,
-        imagem_url TEXT,
-        imagem_arquivo TEXT,
         extra_info TEXT -- Para URL/Arquivo de ebook
     )
     ''')

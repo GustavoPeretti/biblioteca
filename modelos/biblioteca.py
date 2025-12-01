@@ -3,6 +3,9 @@ from modelos.administrador import Administrador
 from modelos.bibliotecario import Bibliotecario
 from modelos.emprestimo import Emprestimo
 from modelos.reserva import Reserva
+from modelos.livro import Livro
+from modelos.ebook import Ebook
+from modelos import database
 from config import LIMITE_EMPRESTIMOS_SIMULTANEOS, PRAZO_VALIDADE_RESERVA
 import datetime
 
@@ -15,53 +18,106 @@ class Biblioteca:
         self.usuarios = []
         self.emprestimos = []
         self.reservas = []
-        self._inicializar_dados()
+        database.inicializar_banco()
+        self._carregar_dados()
         
-    def _inicializar_dados(self):
-        # Usuários padrão (usar classes específicas e manter atributo 'tipo' para compatibilidade)
+    def _carregar_dados(self):
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Carregar Usuários
+        cursor.execute("SELECT * FROM usuarios")
+        for row in cursor.fetchall():
+            classe_tipo = {
+                'membro': Membro,
+                'administrador': Administrador,
+                'bibliotecario': Bibliotecario
+            }.get(row['tipo'], Membro)
+            
+            usuario = classe_tipo(row['nome'], row['email'], row['senha'], row['cpf'])
+            usuario._id = row['id']
+            usuario.tipo = row['tipo']
+            self.usuarios.append(usuario)
+            
+        # 2. Carregar Itens
+        cursor.execute("SELECT * FROM itens")
+        for row in cursor.fetchall():
+            if row['tipo'] == 'livro':
+                item = Livro(row['nome'], None, None, row['autor'], row['paginas'], row['isbn'], row['categoria'])
+            else:
+                
+                item = Ebook(row['nome'], None, None, row['autor'], row['paginas'], row['isbn'], row['categoria'], None, None)
+                
+            item._id = row['id']
+            item._status = row['status']
+            self.itens.append(item)
+            
+        #Carregar Empréstimos
+        cursor.execute("SELECT * FROM emprestimos")
+        for row in cursor.fetchall():
+            # Encontrar objetos reais
+            item_obj = next((i for i in self.itens if str(i.id) == row['item_id']), None)
+            membro_obj = next((u for u in self.usuarios if str(u.id) == row['membro_id']), None)
+            
+            if item_obj and membro_obj:
+                emp = Emprestimo(item_obj, membro_obj)
+                emp._id = row['id']
+                emp._data_emprestimo = datetime.datetime.fromisoformat(row['data_emprestimo']) if row['data_emprestimo'] else None
+                emp._data_devolucao = datetime.datetime.fromisoformat(row['data_devolucao']) if row['data_devolucao'] else None
+                emp._data_quitacao = datetime.datetime.fromisoformat(row['data_quitacao']) if row['data_quitacao'] else None
+                emp._quantidade_renovacoes = row['quantidade_renovacoes']
+                emp._status = row['status']
+                # Restaurar multa
+                if row['multa_valor'] is not None:
+                    from modelos.multa import Multa
+                    emp._multa = Multa(row['multa_valor'], bool(row['multa_paga']))
+                
+                self.emprestimos.append(emp)
+
+        #Carregar Reservas
+        cursor.execute("SELECT * FROM reservas")
+        for row in cursor.fetchall():
+            item_obj = next((i for i in self.itens if str(i.id) == row['item_id']), None)
+            membro_obj = next((u for u in self.usuarios if str(u.id) == row['membro_id']), None)
+            
+            if item_obj and membro_obj:
+                res = Reserva(item_obj, membro_obj)
+                res._id = row['id']
+                res._data_reserva = datetime.datetime.fromisoformat(row['data_reserva'])
+                res._data_cancelamento = datetime.datetime.fromisoformat(row['data_cancelamento']) if row['data_cancelamento'] else None
+                res._data_finalizacao = datetime.datetime.fromisoformat(row['data_finalizacao']) if row['data_finalizacao'] else None
+                res._status = row['status']
+                self.reservas.append(res)
+        
+        conn.close()
+        
+        #Se vazio, inicia padrão
+        if not self.usuarios:
+            self._inicializar_dados_padrao()
+
+    def _inicializar_dados_padrao(self):
+        #Usuários padrão
         admin = Administrador("Admin Sistema", "admin@biblioteca.com", "admin123", "000.000.000-00")
         admin.tipo = 'administrador'
-        self.usuarios.append(admin)
+        self.adicionar_usuario(admin.nome, admin.email, admin.senha, admin.cpf, admin.tipo)
 
         bib = Bibliotecario("Maria Silva", "maria@biblioteca.com", "biblio123", "111.111.111-11")
         bib.tipo = 'bibliotecario'
-        self.usuarios.append(bib)
+        self.adicionar_usuario(bib.nome, bib.email, bib.senha, bib.cpf, bib.tipo)
 
         membro = Membro("João Santos", "joao@email.com", "senha123", "222.222.222-22")
         membro.tipo = 'membro'
-        self.usuarios.append(membro)
+        self.adicionar_usuario(membro.nome, membro.email, membro.senha, membro.cpf, membro.tipo)
 
-        # Itens de exemplo
-        self.itens.append({
-            'id': 1,
-            'nome': 'O Senhor dos Anéis',
-            'autor': 'J.R.R. Tolkien',
-            'isbn': '978-8533613379',
-            'categoria': 'Fantasia',
-            'paginas': 1200,
-            'tipo': 'livro',
-            'status': 'disponivel'
-        })
-        self.itens.append({
-            'id': 2,
-            'nome': '1984',
-            'autor': 'George Orwell',
-            'isbn': '978-8535914849',
-            'categoria': 'Ficção Científica',
-            'paginas': 416,
-            'tipo': 'livro',
-            'status': 'disponivel'
-        })
-        self.itens.append({
-            'id': 3,
-            'nome': 'Clean Code',
-            'autor': 'Robert C. Martin',
-            'isbn': '978-0132350884',
-            'categoria': 'Tecnologia',
-            'paginas': 464,
-            'tipo': 'ebook',
-            'status': 'disponivel'
-        })
+        #Itens de exemplo
+        livro1 = Livro('O Senhor dos Anéis', None, None, 'J.R.R. Tolkien', 1200, '978-8533613379', 'Fantasia')
+        self.adicionar_item(livro1)
+        
+        livro2 = Livro('1984', None, None, 'George Orwell', 416, '978-8535914849', 'Ficção Científica')
+        self.adicionar_item(livro2)
+        
+        ebook1 = Ebook('Clean Code', None, None, 'Robert C. Martin', 464, '978-0132350884', 'Tecnologia', None, None)
+        self.adicionar_item(ebook1)
     
     def adicionar_usuario(self, nome, email, senha, cpf, tipo):
         classe_tipo = {
@@ -71,9 +127,18 @@ class Biblioteca:
         }[tipo]
 
         usuario = classe_tipo(nome, email, senha, cpf)
-        # manter atributo 'tipo' para compatibilidade com a interface
+        #manter atributo 'tipo' para interface
         usuario.tipo = tipo
         self.usuarios.append(usuario)
+        
+        conn = database.get_connection()
+        conn.execute(
+            "INSERT INTO usuarios (id, nome, email, senha, cpf, tipo) VALUES (?, ?, ?, ?, ?, ?)",
+            (str(usuario.id), usuario.nome, usuario.email, usuario.senha, usuario.cpf, tipo)
+        )
+        conn.commit()
+        conn.close()
+        
         return usuario
         
     def remover_usuario(self, id):
@@ -89,9 +154,27 @@ class Biblioteca:
 
         # Remover instância da lista
         self.usuarios.remove(usuario)
+        
+        conn = database.get_connection()
+        conn.execute("DELETE FROM usuarios WHERE id = ?", (str(usuario.id),))
+        conn.commit()
+        conn.close()
 
     def adicionar_item(self, item):
         self.itens.append(item)
+        
+        if isinstance(item, dict):
+             pass
+        else:
+            conn = database.get_connection()
+            tipo = 'ebook' if isinstance(item, Ebook) else 'livro'
+            conn.execute(
+                '''INSERT INTO itens (id, tipo, nome, autor, isbn, categoria, paginas, status) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (str(item.id), tipo, item.nome, item.autor, item.isbn, item.categoria, item.num_paginas, 'disponivel')
+            )
+            conn.commit()
+            conn.close()
 
     def remover_item(self, id):
         # Filtro de itens por ID
@@ -106,6 +189,13 @@ class Biblioteca:
 
         # Remover instância da lista
         self.itens.remove(item)
+        
+        # Persistência
+        conn = database.get_connection()
+        item_id = item['id'] if isinstance(item, dict) else str(item.id)
+        conn.execute("DELETE FROM itens WHERE id = ?", (item_id,))
+        conn.commit()
+        conn.close()
     
     def emprestar_item(self, item, membro):
         # Se o usuário não for um membro (apenas membros podem emprestar e reservar)
@@ -143,7 +233,19 @@ class Biblioteca:
         # Se nunca teve empréstimos, nunca teve reserva. Isso significa que temos informações
         # suficientes para saber que o livro pode ser emprestado
         if not filtro_ultimo_emprestimo:
-            self.emprestimos.append(Emprestimo(item, membro))
+            novo_emp = Emprestimo(item, membro)
+            self.emprestimos.append(novo_emp)
+            
+            # Persistência
+            conn = database.get_connection()
+            conn.execute(
+                '''INSERT INTO emprestimos (id, item_id, membro_id, data_emprestimo, status, quantidade_renovacoes) 
+                   VALUES (?, ?, ?, ?, ?, ?)''',
+                (str(novo_emp.id), str(item.id), str(membro.id), novo_emp.data_emprestimo, 'ativo', 0)
+            )
+            conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('emprestado', str(item.id)))
+            conn.commit()
+            conn.close()
             return
 
         # Ordenação e reversão para garantir que o primeiro elemento da lista seja o empŕestimo mais recente
@@ -170,13 +272,32 @@ class Biblioteca:
                     reserva['data_cancelamento'] = datetime.datetime.now()
                 else:
                     reserva._status = 'expirada'
+                
+                # Persistência da expiração
+                res_id = reserva['id'] if isinstance(reserva, dict) else str(reserva.id)
+                conn = database.get_connection()
+                conn.execute("UPDATE reservas SET status = ?, data_cancelamento = ? WHERE id = ?", ('expirada', datetime.datetime.now(), res_id))
+                conn.commit()
+                conn.close()
 
         # Obtenção das reservas "honestas", com prioridade para retirar
         reservas_ativas_item = [r for r in reservas_ativas_item if _get_status(r) == 'aguardando']
 
         # Se não há reservas ativas, não há prioridade para verificar
         if not reservas_ativas_item:
-            self.emprestimos.append(Emprestimo(item, membro))
+            novo_emp = Emprestimo(item, membro)
+            self.emprestimos.append(novo_emp)
+            
+            # Persistência
+            conn = database.get_connection()
+            conn.execute(
+                '''INSERT INTO emprestimos (id, item_id, membro_id, data_emprestimo, status, quantidade_renovacoes) 
+                   VALUES (?, ?, ?, ?, ?, ?)''',
+                (str(novo_emp.id), str(item.id), str(membro.id), novo_emp.data_emprestimo, 'ativo', 0)
+            )
+            conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('emprestado', str(item.id)))
+            conn.commit()
+            conn.close()
             return
 
         # Ordenação das reservas ativas por ordem de reserva (as primeiras reservas vêm primeiro)
@@ -190,7 +311,23 @@ class Biblioteca:
             raise ValueError('Este item possui reservas. Apenas o primeiro membro da fila pode emprestar.')
 
         # Criar o empréstimo
-        self.emprestimos.append(Emprestimo.de_reserva(reservas_ativas_item[0]))
+        novo_emp = Emprestimo.de_reserva(reservas_ativas_item[0])
+        self.emprestimos.append(novo_emp)
+        
+        # Persistência
+        reserva_utilizada = reservas_ativas_item[0]
+        conn = database.get_connection()
+        # Atualizar reserva
+        conn.execute("UPDATE reservas SET status = ?, data_finalizacao = ? WHERE id = ?", ('finalizada', datetime.datetime.now(), str(reserva_utilizada.id)))
+        # Inserir empréstimo
+        conn.execute(
+            '''INSERT INTO emprestimos (id, item_id, membro_id, data_emprestimo, status, quantidade_renovacoes) 
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (str(novo_emp.id), str(item.id), str(membro.id), novo_emp.data_emprestimo, 'ativo', 0)
+        )
+        conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('emprestado', str(item.id)))
+        conn.commit()
+        conn.close()
         
     def renovar_emprestimo(self, id_emprestimo):
         # Localiza empréstimo pelo id
@@ -205,6 +342,12 @@ class Biblioteca:
         
         # Delega a lógica de renovação ao próprio objeto Emprestimo
         emprestimo.renovar()
+        
+        # Persistência
+        conn = database.get_connection()
+        conn.execute("UPDATE emprestimos SET quantidade_renovacoes = ? WHERE id = ?", (emprestimo._quantidade_renovacoes, str(emprestimo.id)))
+        conn.commit()
+        conn.close()
         
         return emprestimo
 
@@ -240,7 +383,18 @@ class Biblioteca:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
         
         # Criar a reserva
-        self.reservas.append(Reserva(item, membro))
+        nova_reserva = Reserva(item, membro)
+        self.reservas.append(nova_reserva)
+        
+        # Persistência
+        conn = database.get_connection()
+        conn.execute(
+            '''INSERT INTO reservas (id, item_id, membro_id, data_reserva, status) 
+               VALUES (?, ?, ?, ?, ?)''',
+            (str(nova_reserva.id), str(item.id), str(membro.id), nova_reserva.data_reserva, 'aguardando')
+        )
+        conn.commit()
+        conn.close()
 
     def registrar_pagamento_multa(self, id_emprestimo):
         # Localiza empréstimo pelo id
@@ -252,6 +406,13 @@ class Biblioteca:
 
         # Delegar a lógica de quitação ao próprio objeto Emprestimo
         emprestimo.quitar_divida()
+        
+        # Persistência
+        conn = database.get_connection()
+        conn.execute("UPDATE emprestimos SET status = ?, data_quitacao = ?, multa_paga = ? WHERE id = ?", 
+                     ('finalizado', emprestimo.data_quitacao, True, str(emprestimo.id)))
+        conn.commit()
+        conn.close()
 
         return emprestimo
 
@@ -276,6 +437,21 @@ class Biblioteca:
                 setattr(item, 'status', 'disponivel')
             except Exception:
                 pass
+                
+        # Persistência
+        conn = database.get_connection()
+        multa_valor = emprestimo.multa.valor if emprestimo.multa else None
+        multa_paga = emprestimo.multa.paga if emprestimo.multa else None
+        
+        conn.execute(
+            "UPDATE emprestimos SET status = ?, data_devolucao = ?, multa_valor = ?, multa_paga = ? WHERE id = ?",
+            (emprestimo.status, emprestimo.data_devolucao, multa_valor, multa_paga, str(emprestimo.id))
+        )
+        
+        item_id = item['id'] if isinstance(item, dict) else str(item.id)
+        conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('disponivel', item_id))
+        conn.commit()
+        conn.close()
 
 
         return emprestimo

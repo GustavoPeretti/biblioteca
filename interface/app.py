@@ -1,11 +1,16 @@
 import os
 import sys
+import json
+import os
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime, timedelta
 
 
 from modelos.biblioteca import Biblioteca
+from modelos.livro import Livro
+from modelos.ebook import Ebook
 
 class SistemaBiblioteca(tk.Tk):
     def __init__(self):
@@ -39,7 +44,24 @@ class SistemaBiblioteca(tk.Tk):
         }
 
         # Tela de login
-        self.criar_tela_login()
+        if os.path.exists("session.json"):
+            try:
+                with open("session.json", "r") as f:
+                    data = json.load(f)
+                    user_id = data.get("user_id")
+                    
+                    # Tentar encontrar usuário pelo ID
+                    usuario = next((u for u in self.biblioteca.usuarios if str(u.id) == str(user_id)), None)
+                    
+                    if usuario:
+                        self.usuario_logado = usuario
+                        self.criar_interface_principal()
+                    else:
+                        self.criar_tela_login()
+            except Exception:
+                self.criar_tela_login()
+        else:
+            self.criar_tela_login()
 
     def _dig(self, obj, *keys):
         """Acessa valores aninhados de dicts ou atributos de objetos de forma segura.
@@ -150,6 +172,14 @@ class SistemaBiblioteca(tk.Tk):
 
         if usuario:
             self.usuario_logado = usuario
+            
+            # Salvar sessão
+            try:
+                with open("session.json", "w") as f:
+                    json.dump({"user_id": str(usuario.id)}, f)
+            except Exception as e:
+                print(f"Erro ao salvar sessão: {e}")
+                
             self.criar_interface_principal()
         else:
             messagebox.showerror("Erro", "Email ou senha incorretos!")
@@ -398,13 +428,34 @@ class SistemaBiblioteca(tk.Tk):
         # Botão cadastrar
         def cadastrar():
             if all([nome_entry.get(), email_entry.get(), cpf_entry.get(), tipo_var.get(), senha_entry.get()]):
+                # Validação de Nome
+                if not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", nome_entry.get()):
+                    messagebox.showerror("Erro", "Nome deve conter apenas letras.")
+                    return
+
+                # Validação de Email
+                if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email_entry.get()):
+                    messagebox.showerror("Erro", "Email inválido.")
+                    return
+
+                # Validação de Senha
+                if len(senha_entry.get()) < 6:
+                    messagebox.showerror("Erro", "Senha deve ter no mínimo 6 caracteres.")
+                    return
+
+                # Validação de CPF
+                cpf = cpf_entry.get().strip()
+                if not cpf.isdigit() or len(cpf) != 11:
+                    messagebox.showerror("Erro", "CPF deve conter apenas números e ter 11 dígitos.")
+                    return
+
                 try:
                     # use o método do modelo para criar o usuário correto (membro/bibliotecario/administrador)
                     self.biblioteca.adicionar_usuario(
                         nome_entry.get(),
                         email_entry.get(),
                         senha_entry.get(),
-                        cpf_entry.get(),
+                        cpf,
                         tipo_var.get()
                     )
                     messagebox.showinfo("Sucesso", "Usuário cadastrado com sucesso!")
@@ -525,19 +576,59 @@ class SistemaBiblioteca(tk.Tk):
 
             def cadastrar_item():
                 if all([tipo_var.get(), titulo_entry.get(), autor_entry.get(), isbn_entry.get()]):
-                    novo_item = {
-                        'id': len(self.biblioteca.itens) + 1,
-                        'tipo': tipo_var.get(),
-                        'nome': titulo_entry.get(),
-                        'autor': autor_entry.get(),
-                        'isbn': isbn_entry.get(),
-                        'categoria': categoria_entry.get(),
-                        'paginas': int(paginas_entry.get()) if paginas_entry.get().isdigit() else 0,
-                        'status': 'disponivel'
-                    }
-                    self.biblioteca.itens.append(novo_item)
-                    messagebox.showinfo("Sucesso", "Item cadastrado com sucesso!")
-                    self.mostrar_itens()
+                    # Validação de Autor
+                    if not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", autor_entry.get()):
+                        messagebox.showerror("Erro", "Nome do autor deve conter apenas letras.")
+                        return
+
+                    # Validação de Categoria (se preenchida)
+                    if categoria_entry.get() and not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", categoria_entry.get()):
+                        messagebox.showerror("Erro", "Categoria deve conter apenas letras.")
+                        return
+
+                    # Validação de ISBN
+                    if not re.match(r"^[0-9-]+$", isbn_entry.get()):
+                        messagebox.showerror("Erro", "ISBN deve conter apenas números e hífens.")
+                        return
+
+                    # Validação de Páginas
+                    paginas_str = paginas_entry.get()
+                    if not paginas_str.isdigit() or int(paginas_str) <= 0:
+                        messagebox.showerror("Erro", "Número de páginas deve ser um valor inteiro positivo.")
+                        return
+                    
+                    try:
+                        if tipo_var.get() == 'livro':
+                            # Livro(nome, imagem_url, imagem_arquivo, autor, num_paginas, isbn, categoria)
+                            # Passando None para imagens pois foram removidas
+                            novo_item = Livro(
+                                titulo_entry.get(), 
+                                None, 
+                                None, 
+                                autor_entry.get(), 
+                                int(paginas_str), 
+                                isbn_entry.get(), 
+                                categoria_entry.get()
+                            )
+                        else:
+                            # Ebook(nome, imagem_url, imagem_arquivo, autor, num_paginas, isbn, categoria, arquivo, url)
+                            novo_item = Ebook(
+                                titulo_entry.get(), 
+                                None, 
+                                None, 
+                                autor_entry.get(), 
+                                int(paginas_str), 
+                                isbn_entry.get(), 
+                                categoria_entry.get(),
+                                None, # arquivo
+                                None  # url
+                            )
+                        
+                        self.biblioteca.adicionar_item(novo_item)
+                        messagebox.showinfo("Sucesso", "Item cadastrado com sucesso!")
+                        self.mostrar_itens()
+                    except Exception as e:
+                        messagebox.showerror("Erro", f"Erro ao cadastrar item: {str(e)}")
                 else:
                     messagebox.showerror("Erro", "Preencha todos os campos obrigatórios!")
 
@@ -563,12 +654,30 @@ class SistemaBiblioteca(tk.Tk):
         scrollbar = ttk.Scrollbar(parent, orient='vertical', command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg='white')
 
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
 
-        canvas.create_window((0, 0), window=scrollable_frame, anchor='nw')
+        # Frame interno que conterá os itens
+        scrollable_frame = tk.Frame(canvas, bg='white')
+
+        # Configurar colunas para expandir (3 colunas)
+        scrollable_frame.grid_columnconfigure(0, weight=1)
+        scrollable_frame.grid_columnconfigure(1, weight=1)
+        scrollable_frame.grid_columnconfigure(2, weight=1)
+
+        # Window no canvas
+        window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor='nw')
+
+        def on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def on_canvas_configure(event):
+            # Atualiza a largura do frame para igualar a do canvas
+            canvas.itemconfig(window_id, width=event.width)
+
+        scrollable_frame.bind("<Configure>", on_frame_configure)
+        canvas.bind("<Configure>", on_canvas_configure)
+
         canvas.configure(yscrollcommand=scrollbar.set)
 
         # Criar cards de itens
@@ -1187,6 +1296,14 @@ class SistemaBiblioteca(tk.Tk):
         """Fazer logout"""
         if messagebox.askyesno("Sair", "Deseja realmente sair do sistema?"):
             self.usuario_logado = None
+            
+            # Remover sessão
+            if os.path.exists("session.json"):
+                try:
+                    os.remove("session.json")
+                except Exception:
+                    pass
+                    
             self.criar_tela_login()
 
 if __name__ == "__main__":
