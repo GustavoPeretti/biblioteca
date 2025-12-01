@@ -512,7 +512,7 @@ class SistemaBiblioteca(tk.Tk):
 
         # Preencher dados
         for usuario in self.biblioteca.usuarios:
-            tree.insert('', 'end', values=(
+            tree.insert('', 'end', iid=str(usuario.id), values=(
                 usuario.nome,
                 usuario.email,
                 usuario.cpf,
@@ -521,6 +521,35 @@ class SistemaBiblioteca(tk.Tk):
 
         tree.pack(fill='both', expand=True)
         scrollbar.config(command=tree.yview)
+
+        def remover_usuario_selecionado():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showerror('Erro', 'Selecione um usuário para remover')
+                return
+            
+            user_id = sel[0]
+            
+            # Evitar remover a si mesmo
+            if str(user_id) == str(self.usuario_logado.id):
+                 messagebox.showerror('Erro', 'Você não pode remover a si mesmo!')
+                 return
+
+            if messagebox.askyesno('Confirmar', 'Deseja realmente remover este usuário?'):
+                try:
+                    self.biblioteca.remover_usuario(user_id)
+                    messagebox.showinfo('Sucesso', 'Usuário removido com sucesso')
+                    self.mostrar_usuarios()
+                except Exception as e:
+                    messagebox.showerror('Erro', str(e))
+
+        tk.Button(
+            table_frame, 
+            text="🗑️ Remover Usuário Selecionado", 
+            bg=self.cores['danger'], 
+            fg='white',
+            command=remover_usuario_selecionado
+        ).pack(pady=10)
 
     def mostrar_itens(self):
         """Gerenciar acervo"""
@@ -732,6 +761,27 @@ class SistemaBiblioteca(tk.Tk):
                 padx=10,
                 pady=3
             ).pack(pady=10)
+
+            # Botão de remover (apenas admin/bibliotecario)
+            if self.usuario_logado.tipo in ['administrador', 'bibliotecario']:
+                def remover_item_click(id_item=self._dig(item, 'id')):
+                    if messagebox.askyesno('Confirmar', 'Deseja realmente remover este item?'):
+                        try:
+                            self.biblioteca.remover_item(id_item)
+                            messagebox.showinfo('Sucesso', 'Item removido com sucesso')
+                            self.mostrar_itens()
+                        except Exception as e:
+                            messagebox.showerror('Erro', str(e))
+
+                tk.Button(
+                    item_card,
+                    text="🗑️ Remover",
+                    font=("Arial", 9),
+                    bg=self.cores['danger'],
+                    fg='white',
+                    cursor='hand2',
+                    command=remover_item_click
+                ).pack(pady=5)
 
         # Configurar grid
         for i in range(3):

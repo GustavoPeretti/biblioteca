@@ -30,6 +30,13 @@ A figura abaixo contém as principais classes projetadas na etapa de design do s
 
 Cada classe foi organizada em um arquivo *python* no diretório *modelos*. As classes abstratas foram configuradas com a herança da classe `abc` e com a marcação dos métodos abstratos com o *decorator* `@abstractmethod`.
 
+
+## Persistência de Dados
+
+Para garantir a integridade e a durabilidade das informações, optou-se pela utilização do banco de dados SQLite. Desta forma, todos os registros de usuários, itens, empréstimos e reservas são armazenados permanentemente no arquivo `biblioteca.db`, permitindo que o estado do sistema seja preservado entre diferentes execuções.
+
+A camada de persistência foi integrada de forma transparente às classes de modelo, assegurando que as regras de negócio permaneçam desacopladas da lógica de armazenamento. Adicionalmente, implementou-se um mecanismo de sessão persistente via arquivo `session.json`, que armazena as credenciais do usuário logado, agilizando o acesso ao sistema em usos subsequentes.
+
 ## Utilização como *library*
 
 Essa é uma forma de representar dados de uma biblioteca por meio da classe biblioteca.
