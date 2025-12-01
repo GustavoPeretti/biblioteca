@@ -1,6 +1,7 @@
 """
 Suite de testes completa para a aplicação de Biblioteca
 Testa todas as funcionalidades: usuários, itens, empréstimos, reservas e renovações
+# Tests updated for SQLite persistence
 """
 
 import sys
