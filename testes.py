@@ -5,13 +5,29 @@ Testa todas as funcionalidades: usuários, itens, empréstimos, reservas e renov
 
 import sys
 import datetime
+import os
+import sqlite3
 from modelos.biblioteca import Biblioteca
+from modelos import database
+# Patch config for tests (user has a very short duration in config.py)
+import modelos.emprestimo
+modelos.emprestimo.PRAZO_DEVOLUCAO = 7
+PRAZO_DEVOLUCAO = 7
 from modelos.livro import Livro
 from modelos.ebook import Ebook
 from modelos.membro import Membro
 from modelos.administrador import Administrador
 from modelos.bibliotecario import Bibliotecario
 from config import PRAZO_DEVOLUCAO, LIMITE_RENOVACOES, LIMITE_EMPRESTIMOS_SIMULTANEOS
+
+# Patch config for tests (user has a very short duration in config.py)
+import modelos.emprestimo
+modelos.emprestimo.PRAZO_DEVOLUCAO = 7
+PRAZO_DEVOLUCAO = 7
+
+# Configurar banco de teste
+TEST_DB = "test_biblioteca.db"
+database.DB_NAME = TEST_DB
 
 # Cores para output
 VERDE = '\033[92m'
@@ -23,6 +39,36 @@ NEGRITO = '\033[1m'
 # Contadores
 testes_passaram = 0
 testes_falharam = 0
+
+def criar_biblioteca_vazia():
+    """Cria uma instância de Biblioteca com banco de dados limpo"""
+    # Remover banco anterior se existir
+    if os.path.exists(TEST_DB):
+        try:
+            os.remove(TEST_DB)
+        except Exception:
+            pass
+            
+    # Inicializar nova biblioteca (cria tabelas e dados padrão)
+    bib = Biblioteca()
+    
+    # Limpar dados padrão para testes limpos
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM emprestimos")
+    cursor.execute("DELETE FROM reservas")
+    cursor.execute("DELETE FROM itens")
+    cursor.execute("DELETE FROM usuarios")
+    conn.commit()
+    conn.close()
+    
+    # Limpar listas em memória
+    bib.itens = []
+    bib.usuarios = []
+    bib.emprestimos = []
+    bib.reservas = []
+    
+    return bib
 
 def teste_passou(nome_teste):
     global testes_passaram
@@ -56,7 +102,7 @@ def teste_exception(funcao, tipo_excecao, nome_teste, **kwargs):
 def testes_usuarios():
     print(f"\n{NEGRITO}=== TESTES DE USUÁRIOS ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Teste 1: Adicionar usuário tipo Membro
     try:
@@ -110,7 +156,7 @@ def testes_usuarios():
 def testes_itens():
     print(f"\n{NEGRITO}=== TESTES DE ITENS (LIVROS E EBOOKS) ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Teste 1: Adicionar Livro
     try:
@@ -154,14 +200,16 @@ def testes_itens():
 def testes_emprestimos():
     print(f"\n{NEGRITO}=== TESTES DE EMPRÉSTIMOS ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Setup
     membro = Membro('João Silva', 'joao@email.com', 'senha123', '123.456.789-10')
-    bib.usuarios.append(membro)
+    bib.adicionar_usuario(membro.nome, membro.email, membro.senha, membro.cpf, 'membro')
+    membro = bib.usuarios[0] # Pegar objeto com ID gerado
     
     livro = Livro('Python Avançado', None, None, 'Gustavo Peretti', 450, '978-3-16-148410-0', 'Programação')
     bib.adicionar_item(livro)
+    livro = bib.itens[0] # Pegar objeto com ID gerado
     
     # Teste 1: Emprestar item para membro
     try:
@@ -178,6 +226,7 @@ def testes_emprestimos():
     admin = Administrador('Admin', 'admin@email.com', 'senha123', '987.654.321-00')
     livro2 = Livro('Design Patterns', None, None, 'Gang of Four', 416, '978-0-201-63361-0', 'Programação')
     bib.adicionar_item(livro2)
+    livro2 = bib.itens[1]
     
     teste_exception(
         bib.emprestar_item,
@@ -190,17 +239,20 @@ def testes_emprestimos():
     # Teste 4: Ultrapassar limite de empréstimos
     # Criar múltiplos empréstimos até o limite
     membro2 = Membro('Maria', 'maria@email.com', 'senha123', '111.222.333-44')
-    bib.usuarios.append(membro2)
+    bib.adicionar_usuario(membro2.nome, membro2.email, membro2.senha, membro2.cpf, 'membro')
+    membro2 = bib.usuarios[-1]
     
     # Criar e emprestar muitos livros
     for i in range(LIMITE_EMPRESTIMOS_SIMULTANEOS):
         livro_temp = Livro(f'Livro {i}', None, None, f'Autor {i}', 300, f'978-0-00000-{i:04d}', 'Teste')
         bib.adicionar_item(livro_temp)
+        livro_temp = bib.itens[-1]
         bib.emprestar_item(livro_temp, membro2)
     
     # Agora tentar emprestar mais um deve falhar
     livro_extra = Livro('Livro Extra', None, None, 'Autor Extra', 300, '978-9-99999-9999', 'Teste')
     bib.adicionar_item(livro_extra)
+    livro_extra = bib.itens[-1]
     
     teste_exception(
         bib.emprestar_item,
@@ -214,15 +266,19 @@ def testes_emprestimos():
 def testes_reservas():
     print(f"\n{NEGRITO}=== TESTES DE RESERVAS ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Setup
     membro1 = Membro('João', 'joao@email.com', 'senha123', '123.456.789-10')
     membro2 = Membro('Maria', 'maria@email.com', 'senha123', '111.222.333-44')
-    bib.usuarios.extend([membro1, membro2])
+    bib.adicionar_usuario(membro1.nome, membro1.email, membro1.senha, membro1.cpf, 'membro')
+    bib.adicionar_usuario(membro2.nome, membro2.email, membro2.senha, membro2.cpf, 'membro')
+    membro1 = bib.usuarios[0]
+    membro2 = bib.usuarios[1]
     
     livro = Livro('Python Avançado', None, None, 'Gustavo Peretti', 450, '978-3-16-148410-0', 'Programação')
     bib.adicionar_item(livro)
+    livro = bib.itens[0]
     
     # Teste 1: Não é possível reservar item disponível
     teste_exception(
@@ -260,6 +316,7 @@ def testes_reservas():
     admin = Administrador('Admin', 'admin@email.com', 'senha123', '987.654.321-00')
     livro2 = Livro('Design Patterns', None, None, 'Gang of Four', 416, '978-0-201-63361-0', 'Programação')
     bib.adicionar_item(livro2)
+    livro2 = bib.itens[1]
     bib.emprestar_item(livro2, membro1)
     
     teste_exception(
@@ -274,14 +331,16 @@ def testes_reservas():
 def testes_renovacoes():
     print(f"\n{NEGRITO}=== TESTES DE RENOVAÇÕES ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Setup
     membro = Membro('João Silva', 'joao@email.com', 'senha123', '123.456.789-10')
-    bib.usuarios.append(membro)
+    bib.adicionar_usuario(membro.nome, membro.email, membro.senha, membro.cpf, 'membro')
+    membro = bib.usuarios[0]
     
     livro = Livro('Python Avançado', None, None, 'Gustavo Peretti', 450, '978-3-16-148410-0', 'Programação')
     bib.adicionar_item(livro)
+    livro = bib.itens[0]
     
     # Emprestar
     bib.emprestar_item(livro, membro)
@@ -339,14 +398,16 @@ def testes_renovacoes():
 def testes_devolucoes_multas():
     print(f"\n{NEGRITO}=== TESTES DE DEVOLUÇÕES E MULTAS ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Setup
     membro = Membro('João Silva', 'joao@email.com', 'senha123', '123.456.789-10')
-    bib.usuarios.append(membro)
+    bib.adicionar_usuario(membro.nome, membro.email, membro.senha, membro.cpf, 'membro')
+    membro = bib.usuarios[0]
     
     livro = Livro('Python Avançado', None, None, 'Gustavo Peretti', 450, '978-3-16-148410-0', 'Programação')
     bib.adicionar_item(livro)
+    livro = bib.itens[0]
     
     # Emprestar
     bib.emprestar_item(livro, membro)
@@ -363,6 +424,7 @@ def testes_devolucoes_multas():
     # Teste 2: Devolução com atraso (gera multa)
     livro2 = Livro('Design Patterns', None, None, 'Gang of Four', 416, '978-0-201-63361-0', 'Programação')
     bib.adicionar_item(livro2)
+    livro2 = bib.itens[1]
     bib.emprestar_item(livro2, membro)
     emprestimo2 = bib.emprestimos[1]
     
@@ -389,16 +451,22 @@ def testes_devolucoes_multas():
 def testes_fila_reserva():
     print(f"\n{NEGRITO}=== TESTES DE FILA DE RESERVA ==={RESET}\n")
     
-    bib = Biblioteca()
+    bib = criar_biblioteca_vazia()
     
     # Setup
     membro1 = Membro('João', 'joao@email.com', 'senha123', '123.456.789-10')
     membro2 = Membro('Maria', 'maria@email.com', 'senha123', '111.222.333-44')
     membro3 = Membro('Pedro', 'pedro@email.com', 'senha123', '222.333.444-55')
-    bib.usuarios.extend([membro1, membro2, membro3])
+    bib.adicionar_usuario(membro1.nome, membro1.email, membro1.senha, membro1.cpf, 'membro')
+    bib.adicionar_usuario(membro2.nome, membro2.email, membro2.senha, membro2.cpf, 'membro')
+    bib.adicionar_usuario(membro3.nome, membro3.email, membro3.senha, membro3.cpf, 'membro')
+    membro1 = bib.usuarios[0]
+    membro2 = bib.usuarios[1]
+    membro3 = bib.usuarios[2]
     
     livro = Livro('Python Avançado', None, None, 'Gustavo Peretti', 450, '978-3-16-148410-0', 'Programação')
     bib.adicionar_item(livro)
+    livro = bib.itens[0]
     
     # Emprestar para membro1
     bib.emprestar_item(livro, membro1)
@@ -423,7 +491,7 @@ def testes_fila_reserva():
     bib.registrar_devolucao(emprestimo.id)
     
     try:
-        bib.emprestar_item(livro, membro3)
+        bib.emprestar_item(livro, membro2) # Correção: membro2 é o primeiro da fila
         teste_assert(len(bib.emprestimos) == 2, "Primeiro da fila consegue emprestar")
     except Exception as e:
         teste_falhou("Primeiro da fila consegue emprestar", str(e))
@@ -451,6 +519,13 @@ def executar_todos_testes():
         print(f"  {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
+    finally:
+        # Limpar banco de teste ao final
+        if os.path.exists(TEST_DB):
+            try:
+                os.remove(TEST_DB)
+            except Exception:
+                pass
     
     # Resumo final
     total_testes = testes_passaram + testes_falharam
