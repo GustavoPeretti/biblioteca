@@ -11,29 +11,7 @@ from datetime import datetime, timedelta
 from modelos.biblioteca import Biblioteca
 from modelos.livro import Livro
 from modelos.ebook import Ebook
-
-
-# Helpers de formatação
-def format_cpf(cpf):
-    if not cpf:
-        return ''
-    s = re.sub(r"\D", "", str(cpf))
-    if len(s) == 11:
-        return f"{s[:3]}.{s[3:6]}.{s[6:9]}-{s[9:]}"
-    return str(cpf)
-
-
-def format_isbn(isbn):
-    if not isbn:
-        return ''
-    s = re.sub(r"\D", "", str(isbn))
-    # ISBN-13 -> group 3-1-2-6-1 (approx)
-    if len(s) == 13:
-        return f"{s[:3]}-{s[3]}-{s[4:6]}-{s[6:12]}-{s[12]}"
-    # ISBN-10 -> group 1-3-5-1 (approx)
-    if len(s) == 10:
-        return f"{s[:1]}-{s[1:4]}-{s[4:9]}-{s[9]}"
-    return str(isbn)
+from utils.helpers import format_cpf, format_isbn
 
 class SistemaBiblioteca(tk.Tk):
     def __init__(self):
@@ -455,34 +433,13 @@ class SistemaBiblioteca(tk.Tk):
         # Botão cadastrar
         def cadastrar():
             if all([nome_entry.get(), email_entry.get(), cpf_entry.get(), tipo_var.get(), senha_entry.get()]):
-                # Validação de Nome
-                if not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", nome_entry.get()):
-                    messagebox.showerror("Erro", "Nome deve conter apenas letras.")
-                    return
-
-                # Validação de Email
-                if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email_entry.get()):
-                    messagebox.showerror("Erro", "Email inválido.")
-                    return
-
-                # Validação de Senha
-                if len(senha_entry.get()) < 6:
-                    messagebox.showerror("Erro", "Senha deve ter no mínimo 6 caracteres.")
-                    return
-
-                # Validação de CPF
-                cpf = cpf_entry.get().strip()
-                if not cpf.isdigit() or len(cpf) != 11:
-                    messagebox.showerror("Erro", "CPF deve conter apenas números e ter 11 dígitos.")
-                    return
-
                 try:
                     # use o método do modelo para criar o usuário correto (membro/bibliotecario/administrador)
                     self.biblioteca.adicionar_usuario(
                         nome_entry.get(),
                         email_entry.get(),
                         senha_entry.get(),
-                        cpf,
+                        cpf_entry.get().strip(),
                         tipo_var.get()
                     )
                     messagebox.showinfo("Sucesso", "Usuário cadastrado com sucesso!")
@@ -631,29 +588,11 @@ class SistemaBiblioteca(tk.Tk):
             paginas_entry.grid(row=2, column=3, padx=10, pady=5)
 
             def cadastrar_item():
-                if all([tipo_var.get(), titulo_entry.get(), autor_entry.get(), isbn_entry.get()]):
-                    # Validação de Autor
-                    if not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", autor_entry.get()):
-                        messagebox.showerror("Erro", "Nome do autor deve conter apenas letras.")
-                        return
-
-                    # Validação de Categoria (se preenchida)
-                    if categoria_entry.get() and not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", categoria_entry.get()):
-                        messagebox.showerror("Erro", "Categoria deve conter apenas letras.")
-                        return
-
-                    # Validação de ISBN
-                    if not re.match(r"^[0-9-]+$", isbn_entry.get()):
-                        messagebox.showerror("Erro", "ISBN deve conter apenas números e hífens.")
-                        return
-
-                    # Validação de Páginas
-                    paginas_str = paginas_entry.get()
-                    if not paginas_str.isdigit() or int(paginas_str) <= 0:
-                        messagebox.showerror("Erro", "Número de páginas deve ser um valor inteiro positivo.")
-                        return
-                    
+                if all([tipo_var.get(), titulo_entry.get(), autor_entry.get(), isbn_entry.get(), paginas_entry.get()]):
                     try:
+                        # Converter páginas para inteiro
+                        num_paginas = int(paginas_entry.get())
+                        
                         if tipo_var.get() == 'livro':
                             # Livro(nome, imagem_url, imagem_arquivo, autor, num_paginas, isbn, categoria)
                             # Passando None para imagens pois foram removidas
@@ -662,9 +601,9 @@ class SistemaBiblioteca(tk.Tk):
                                 None, 
                                 None, 
                                 autor_entry.get(), 
-                                int(paginas_str), 
+                                num_paginas, 
                                 isbn_entry.get(), 
-                                categoria_entry.get()
+                                categoria_entry.get() or 'Sem categoria'
                             )
                         else:
                             # Ebook(nome, imagem_url, imagem_arquivo, autor, num_paginas, isbn, categoria, arquivo, url)
@@ -673,9 +612,9 @@ class SistemaBiblioteca(tk.Tk):
                                 None, 
                                 None, 
                                 autor_entry.get(), 
-                                int(paginas_str), 
+                                num_paginas, 
                                 isbn_entry.get(), 
-                                categoria_entry.get(),
+                                categoria_entry.get() or 'Sem categoria',
                                 None, # arquivo
                                 None  # url
                             )
@@ -683,6 +622,8 @@ class SistemaBiblioteca(tk.Tk):
                         self.biblioteca.adicionar_item(novo_item)
                         messagebox.showinfo("Sucesso", "Item cadastrado com sucesso!")
                         self.mostrar_itens()
+                    except ValueError as e:
+                        messagebox.showerror("Erro", str(e))
                     except Exception as e:
                         messagebox.showerror("Erro", f"Erro ao cadastrar item: {str(e)}")
                 else:

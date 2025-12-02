@@ -121,6 +121,11 @@ class Biblioteca:
         self.adicionar_item(ebook1)
     
     def adicionar_usuario(self, nome, email, senha, cpf, tipo):
+        # Validar se o email já existe
+        email_existente = next((u for u in self.usuarios if u.email == email), None)
+        if email_existente:
+            raise ValueError("Email já cadastrado no sistema")
+        
         classe_tipo = {
             'membro': Membro,
             'administrador': Administrador,
@@ -488,24 +493,6 @@ class Biblioteca:
         item_id = item['id'] if isinstance(item, dict) else str(item.id)
         conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('disponivel', item_id))
         
-        # Verificar se há reservas aguardando para este item
-        reservas_aguardando = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
-        if reservas_aguardando:
-            # Ordenar por data de reserva
-            reservas_aguardando.sort(key=lambda r: r.data_reserva)
-            reserva_prioritaria = reservas_aguardando[0]
-            
-            # Atualizar status para finalizada (disponível para retirada)
-            if isinstance(reserva_prioritaria, dict):
-                reserva_prioritaria['status'] = 'finalizada'
-                reserva_prioritaria['data_finalizacao'] = datetime.datetime.now()
-            else:
-                reserva_prioritaria.marcar_como_finalizada()
-                
-            res_id = reserva_prioritaria['id'] if isinstance(reserva_prioritaria, dict) else str(reserva_prioritaria.id)
-            conn.execute("UPDATE reservas SET status = ?, data_finalizacao = ? WHERE id = ?", 
-                         ('finalizada', datetime.datetime.now(), res_id))
-
         conn.commit()
         conn.close()
 

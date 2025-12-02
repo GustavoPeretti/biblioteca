@@ -1,13 +1,15 @@
 from abc import ABC
 from uuid import uuid4
+import re
 
 class Usuario(ABC):
     def __init__(self, nome, email, senha, cpf):
         self._id = uuid4()
-        self._nome = nome
-        self._email = email
-        self._senha = senha
-        self._cpf = cpf
+        # Usar os setters para aplicar validações
+        self.nome = nome
+        self.email = email
+        self.senha = senha
+        self.cpf = cpf
         
     @property
     def id(self):
@@ -31,19 +33,36 @@ class Usuario(ABC):
     
     @email.setter
     def email(self, novo_email):
+        if not novo_email or not isinstance(novo_email, str):
+            raise ValueError("Email é obrigatório")
+        if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", novo_email):
+            raise ValueError("Email inválido")
         self._email = novo_email
         
     @senha.setter
     def senha(self, nova_senha):
+        if not nova_senha or not isinstance(nova_senha, str):
+            raise ValueError("Senha é obrigatória")
+        if len(nova_senha) < 6:
+            raise ValueError("Senha deve ter no mínimo 6 caracteres")
         self._senha = nova_senha
         
     @nome.setter
     def nome(self, novo_nome):
+        if not novo_nome or not isinstance(novo_nome, str):
+            raise ValueError("Nome é obrigatório")
+        if not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", novo_nome):
+            raise ValueError("Nome deve conter apenas letras")
         self._nome = novo_nome
     
     @cpf.setter
     def cpf(self, novo_cpf):
-        self._cpf = novo_cpf
+        if not novo_cpf or not isinstance(novo_cpf, str):
+            raise ValueError("CPF é obrigatório")
+        cpf_limpo = re.sub(r"\D", "", novo_cpf)
+        if len(cpf_limpo) != 11:
+            raise ValueError("CPF deve conter 11 dígitos")
+        self._cpf = cpf_limpo
     
     def __str__(self):
         return (

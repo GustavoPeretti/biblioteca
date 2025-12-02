@@ -1,19 +1,21 @@
 from abc import ABC, abstractmethod
 from uuid import uuid4
 import datetime
+import re
 
 class Item(ABC):
     def __init__(self, nome, imagem_url, imagem_arquivo, autor, num_paginas, isbn, categoria):
         self._id = uuid4()
-        self._nome = nome
         self._imagem_url = imagem_url
         self._imagem_arquivo = imagem_arquivo
-        self._autor = autor
-        self._num_paginas = num_paginas
-        self._isbn = isbn
-        self._categoria = categoria
         self._emprestavel = True
         self._data_cadastro = datetime.datetime.now()
+        # Usar os setters para aplicar validações
+        self.nome = nome
+        self.autor = autor
+        self.num_paginas = num_paginas
+        self.isbn = isbn
+        self.categoria = categoria
 
     @property
     def id(self):
@@ -25,6 +27,8 @@ class Item(ABC):
     
     @nome.setter
     def nome(self, novo_nome):
+        if not novo_nome or not isinstance(novo_nome, str):
+            raise ValueError("Nome/Título do item é obrigatório")
         self._nome = novo_nome
 
     @property
@@ -49,6 +53,10 @@ class Item(ABC):
     
     @autor.setter
     def autor(self, novo_autor):
+        if not novo_autor or not isinstance(novo_autor, str):
+            raise ValueError("Autor é obrigatório")
+        if not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", novo_autor):
+            raise ValueError("Nome do autor deve conter apenas letras")
         self._autor = novo_autor
 
     @property
@@ -57,6 +65,8 @@ class Item(ABC):
     
     @num_paginas.setter
     def num_paginas(self, novo_num_paginas):
+        if not isinstance(novo_num_paginas, int) or novo_num_paginas <= 0:
+            raise ValueError("Número de páginas deve ser um valor inteiro positivo")
         self._num_paginas = novo_num_paginas
 
     @property
@@ -65,6 +75,10 @@ class Item(ABC):
     
     @isbn.setter
     def isbn(self, novo_isbn):
+        if not novo_isbn or not isinstance(novo_isbn, str):
+            raise ValueError("ISBN é obrigatório")
+        if not re.match(r"^[0-9-]+$", novo_isbn):
+            raise ValueError("ISBN deve conter apenas números e hífens")
         self._isbn = novo_isbn
 
     @property
@@ -73,6 +87,8 @@ class Item(ABC):
     
     @categoria.setter
     def categoria(self, nova_categoria):
+        if nova_categoria and not re.match(r"^[a-zA-ZÀ-ÿ\s\.\']+$", nova_categoria):
+            raise ValueError("Categoria deve conter apenas letras")
         self._categoria = nova_categoria
 
     @property
