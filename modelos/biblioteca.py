@@ -262,7 +262,7 @@ class Biblioteca:
         data_referencia = emprestimo_mais_recente.data_devolucao
 
         # Filtro para encontrar reservas ativas do item
-        reservas_ativas_item = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
+        reservas_ativas_item = [r for r in self.reservas if _get_status(r) in ['aguardando', 'finalizada'] and getattr(r, 'item', None) == item]
         
         # Atualização do status das reservas expiradas
         for reserva in reservas_ativas_item:
@@ -285,7 +285,8 @@ class Biblioteca:
                 conn.close()
 
         # Obtenção das reservas "honestas", com prioridade para retirar
-        reservas_ativas_item = [r for r in reservas_ativas_item if _get_status(r) == 'aguardando']
+        # Inclui 'aguardando' e 'finalizada' (item devolvido mas ainda não retirado)
+        reservas_ativas_item = [r for r in reservas_ativas_item if _get_status(r) in ['aguardando', 'finalizada']]
 
         # Se não há reservas ativas, não há prioridade para verificar
         if not reservas_ativas_item:
@@ -322,8 +323,16 @@ class Biblioteca:
         # Persistência
         reserva_utilizada = reservas_ativas_item[0]
         conn = database.get_connection()
-        # Atualizar reserva
-        conn.execute("UPDATE reservas SET status = ?, data_finalizacao = ? WHERE id = ?", ('finalizada', datetime.datetime.now(), str(reserva_utilizada.id)))
+        # Atualizar reserva (se já não estiver finalizada)
+        if _get_status(reserva_utilizada) != 'finalizada':
+             conn.execute("UPDATE reservas SET status = ?, data_finalizacao = ? WHERE id = ?", ('finalizada', datetime.datetime.now(), str(reserva_utilizada.id)))
+             # Atualiza objeto em memória também, caso não esteja atualizado
+             if isinstance(reserva_utilizada, dict):
+                 reserva_utilizada['status'] = 'finalizada'
+                 reserva_utilizada['data_finalizacao'] = datetime.datetime.now()
+             else:
+                 reserva_utilizada.marcar_como_finalizada()
+
         # Inserir empréstimo
         conn.execute(
             '''INSERT INTO emprestimos (id, item_id, membro_id, data_emprestimo, status, quantidade_renovacoes) 
@@ -478,6 +487,25 @@ class Biblioteca:
         
         item_id = item['id'] if isinstance(item, dict) else str(item.id)
         conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('disponivel', item_id))
+        
+        # Verificar se há reservas aguardando para este item
+        reservas_aguardando = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
+        if reservas_aguardando:
+            # Ordenar por data de reserva
+            reservas_aguardando.sort(key=lambda r: r.data_reserva)
+            reserva_prioritaria = reservas_aguardando[0]
+            
+            # Atualizar status para finalizada (disponível para retirada)
+            if isinstance(reserva_prioritaria, dict):
+                reserva_prioritaria['status'] = 'finalizada'
+                reserva_prioritaria['data_finalizacao'] = datetime.datetime.now()
+            else:
+                reserva_prioritaria.marcar_como_finalizada()
+                
+            res_id = reserva_prioritaria['id'] if isinstance(reserva_prioritaria, dict) else str(reserva_prioritaria.id)
+            conn.execute("UPDATE reservas SET status = ?, data_finalizacao = ? WHERE id = ?", 
+                         ('finalizada', datetime.datetime.now(), res_id))
+
         conn.commit()
         conn.close()
 
