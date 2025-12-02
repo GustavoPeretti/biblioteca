@@ -3,6 +3,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime, timedelta
+import re
 
 from ..modelos.usuario import Usuario
 from ..modelos.administrador import Administrador
@@ -64,6 +65,27 @@ class SistemaBiblioteca(tk.Tk):
             else:
                 cur = getattr(cur, k, None)
         return cur
+
+    # Helpers de formatação
+    @staticmethod
+    def format_cpf(cpf):
+        if not cpf:
+            return ''
+        s = re.sub(r"\D", "", str(cpf))
+        if len(s) == 11:
+            return f"{s[:3]}.{s[3:6]}.{s[6:9]}-{s[9:]}"
+        return str(cpf)
+
+    @staticmethod
+    def format_isbn(isbn):
+        if not isbn:
+            return ''
+        s = re.sub(r"\D", "", str(isbn))
+        if len(s) == 13:
+            return f"{s[:3]}-{s[3]}-{s[4:6]}-{s[6:12]}-{s[12]}"
+        if len(s) == 10:
+            return f"{s[:1]}-{s[1:4]}-{s[4:9]}-{s[9]}"
+        return str(isbn)
 
     def criar_tela_login(self):
         """Tela de login do sistema"""
@@ -473,7 +495,7 @@ class SistemaBiblioteca(tk.Tk):
             tree.insert('', 'end', values=(
                 usuario.nome,
                 usuario.email,
-                usuario.cpf,
+                self.format_cpf(usuario.cpf),
                 usuario.tipo.upper()
             ))
 
@@ -603,6 +625,8 @@ class SistemaBiblioteca(tk.Tk):
                 f"Autor: {self._dig(item, 'autor')}",
                 f"Categoria: {self._dig(item, 'categoria')}",
                 f"Páginas: {self._dig(item, 'paginas')}",
+                f"Tipo: {'📕 Livro' if self._dig(item, 'tipo') == 'livro' else '💻 E-book'}"
+                f"ISBN: {self.format_isbn(self._dig(item, 'isbn'))}",
                 f"Tipo: {'📕 Livro' if self._dig(item, 'tipo') == 'livro' else '💻 E-book'}"
             ]
 
@@ -851,7 +875,7 @@ class SistemaBiblioteca(tk.Tk):
                     if resp:
                         emp['multa']['paga'] = True
                         emp['status'] = 'finalizado'
-                        messagebox.showinfo('Pago', 'Multa quitada e empréstimo finalizado.')
+                        messagebox.showinfo('Pago', 'Multa quitada e empréstimo finalizado.')                 
                     else:
                         messagebox.showinfo('Registrado', f'Multa registrada: {valor_multa:.2f}')
                 else:

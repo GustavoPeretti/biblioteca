@@ -144,7 +144,8 @@ class Biblioteca:
         
     def remover_usuario(self, id):
         # Filtro de usuários por ID
-        usuarios = [u for u in self.usuarios if u.id == id]
+        # aceitar tanto UUID objects quanto strings
+        usuarios = [u for u in self.usuarios if getattr(u, 'id', None) == id or str(getattr(u, 'id', None)) == str(id)]
 
         # Se o filtro não resultar em nenhum usuário
         if not usuarios:
@@ -231,7 +232,7 @@ class Biblioteca:
         
         # Obtenção do último empréstimo
         # Pode ser que não tenha nenhum resultado, um, ou múltiplos
-        filtro_ultimo_emprestimo = [e for e in self.emprestimos if _get_status(e) != 'ativo' and getattr(e, 'item', None) == getattr(e, 'item', None)] 
+        filtro_ultimo_emprestimo = [e for e in self.emprestimos if _get_status(e) != 'ativo' and getattr(e, 'item', None) == item]
         
         # Se nunca teve empréstimos, nunca teve reserva. Isso significa que temos informações
         # suficientes para saber que o livro pode ser emprestado
@@ -261,11 +262,11 @@ class Biblioteca:
         # Data que o item ficou disponível
         data_referencia = emprestimo_mais_recente.data_devolucao
 
-        # Filtro para encontrar reservas ativas do item
-        reservas_ativas_item = [r for r in self.reservas if _get_status(r) in ['aguardando', 'finalizada'] and getattr(r, 'item', None) == item]
-        
+        # Checar reservas relacionadas para atualizar expiração (inclui 'aguardando' e 'finalizada')
+        reservas_para_validade = [r for r in self.reservas if _get_status(r) in ['aguardando', 'finalizada'] and getattr(r, 'item', None) == item]
+
         # Atualização do status das reservas expiradas
-        for reserva in reservas_ativas_item:
+        for reserva in reservas_para_validade:
             data_validade_reserva = data_referencia + datetime.timedelta(days=PRAZO_VALIDADE_RESERVA)
 
             # Se passou da data de validade
@@ -284,9 +285,8 @@ class Biblioteca:
                 conn.commit()
                 conn.close()
 
-        # Obtenção das reservas "honestas", com prioridade para retirar
-        # Inclui 'aguardando' e 'finalizada' (item devolvido mas ainda não retirado)
-        reservas_ativas_item = [r for r in reservas_ativas_item if _get_status(r) in ['aguardando', 'finalizada']]
+        # Obtenção das reservas que efetivamente bloqueiam empréstimos: apenas 'aguardando'
+        reservas_ativas_item = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
 
         # Se não há reservas ativas, não há prioridade para verificar
         if not reservas_ativas_item:

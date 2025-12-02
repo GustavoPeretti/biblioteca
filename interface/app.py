@@ -12,6 +12,29 @@ from modelos.biblioteca import Biblioteca
 from modelos.livro import Livro
 from modelos.ebook import Ebook
 
+
+# Helpers de formatação
+def format_cpf(cpf):
+    if not cpf:
+        return ''
+    s = re.sub(r"\D", "", str(cpf))
+    if len(s) == 11:
+        return f"{s[:3]}.{s[3:6]}.{s[6:9]}-{s[9:]}"
+    return str(cpf)
+
+
+def format_isbn(isbn):
+    if not isbn:
+        return ''
+    s = re.sub(r"\D", "", str(isbn))
+    # ISBN-13 -> group 3-1-2-6-1 (approx)
+    if len(s) == 13:
+        return f"{s[:3]}-{s[3]}-{s[4:6]}-{s[6:12]}-{s[12]}"
+    # ISBN-10 -> group 1-3-5-1 (approx)
+    if len(s) == 10:
+        return f"{s[:1]}-{s[1:4]}-{s[4:9]}-{s[9]}"
+    return str(isbn)
+
 class SistemaBiblioteca(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -519,7 +542,7 @@ class SistemaBiblioteca(tk.Tk):
             tree.insert('', 'end', iid=str(usuario.id), values=(
                 usuario.nome,
                 usuario.email,
-                usuario.cpf,
+                format_cpf(usuario.cpf),
                 usuario.tipo.upper()
             ))
 
@@ -736,6 +759,7 @@ class SistemaBiblioteca(tk.Tk):
                 f"Autor: {self._dig(item, 'autor')}",
                 f"Categoria: {self._dig(item, 'categoria')}",
                 f"Páginas: {self._dig(item, 'num_paginas')}",
+                f"ISBN: {format_isbn(self._dig(item, 'isbn'))}",
                 f"Tipo: {'📕 Livro' if self._dig(item, 'tipo') == 'livro' else '💻 E-book'}"
             ]
 
@@ -1100,8 +1124,8 @@ class SistemaBiblioteca(tk.Tk):
 
         # Filtrar reservas: se membro, mostrar apenas as do próprio membro
         reservas = self.biblioteca.reservas
-        # Filtrar apenas reservas aguardando
-        reservas = [r for r in reservas if (getattr(r, 'status', None) or r.get('status')) == 'aguardando']
+        # Mostrar reservas com status 'aguardando' ou 'finalizada' (manter histórico)
+        reservas = [r for r in reservas if (getattr(r, 'status', None) or r.get('status')) in ('aguardando', 'finalizada')]
 
         if self.usuario_logado.tipo == 'membro':
             reservas = [r for r in reservas if getattr(r.membro, 'id', None) == self.usuario_logado.id]

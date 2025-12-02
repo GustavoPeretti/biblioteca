@@ -44,6 +44,6 @@ class Reserva:
         self._status = 'cancelada'
 
     def marcar_como_finalizada(self):
-        self._data_cancelamento = datetime.datetime.now()
+        self._data_finalizacao = datetime.datetime.now()
         self._status = 'finalizada'
     
