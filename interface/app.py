@@ -75,7 +75,11 @@ class SistemaBiblioteca(tk.Tk):
             if isinstance(cur, dict):
                 cur = cur.get(k)
             else:
-                cur = getattr(cur, k, None)
+                val = getattr(cur, k, None)
+                if val is None and not hasattr(cur, k):
+                     # Tentar atributo protegido/privado se o público falhar
+                     val = getattr(cur, f"_{k}", None)
+                cur = val
         return cur
 
     def criar_tela_login(self):
@@ -731,7 +735,7 @@ class SistemaBiblioteca(tk.Tk):
             detalhes = [
                 f"Autor: {self._dig(item, 'autor')}",
                 f"Categoria: {self._dig(item, 'categoria')}",
-                f"Páginas: {self._dig(item, 'paginas')}",
+                f"Páginas: {self._dig(item, 'num_paginas')}",
                 f"Tipo: {'📕 Livro' if self._dig(item, 'tipo') == 'livro' else '💻 E-book'}"
             ]
 
@@ -1096,6 +1100,9 @@ class SistemaBiblioteca(tk.Tk):
 
         # Filtrar reservas: se membro, mostrar apenas as do próprio membro
         reservas = self.biblioteca.reservas
+        # Filtrar apenas reservas aguardando
+        reservas = [r for r in reservas if (getattr(r, 'status', None) or r.get('status')) == 'aguardando']
+
         if self.usuario_logado.tipo == 'membro':
             reservas = [r for r in reservas if getattr(r.membro, 'id', None) == self.usuario_logado.id]
 
@@ -1131,12 +1138,19 @@ class SistemaBiblioteca(tk.Tk):
                 messagebox.showinfo('Info', 'Reserva não está em estado aguardando')
                 return
             # cancelar dependendo do tipo
-            if isinstance(reserva, dict):
-                # marcar como cancelada no dicionário
-                reserva['status'] = 'cancelada'
-                reserva['data_cancelamento'] = datetime.now()
-            else:
-                reserva.cancelar()
+            # cancelar dependendo do tipo
+            try:
+                if isinstance(reserva, dict):
+                    # Se for dict, não temos como chamar o método da biblioteca facilmente sem ID
+                    # Mas o código original assumia que 'reserva' vinha de self.biblioteca.reservas
+                    # Vamos tentar achar o ID
+                    res_id = reserva.get('id')
+                    self.biblioteca.cancelar_reserva(res_id)
+                else:
+                    self.biblioteca.cancelar_reserva(reserva.id)
+            except Exception as e:
+                messagebox.showerror('Erro', str(e))
+                return
             messagebox.showinfo('Cancelada', 'Reserva cancelada com sucesso')
             self.mostrar_reservas()
 

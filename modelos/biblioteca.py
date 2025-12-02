@@ -50,6 +50,7 @@ class Biblioteca:
                 
             item._id = row['id']
             item._status = row['status']
+            item.tipo = row['tipo']
             self.itens.append(item)
             
         #Carregar Empréstimos
@@ -168,6 +169,8 @@ class Biblioteca:
         else:
             conn = database.get_connection()
             tipo = 'ebook' if isinstance(item, Ebook) else 'livro'
+            item.tipo = tipo
+            item._status = 'disponivel'
             conn.execute(
                 '''INSERT INTO itens (id, tipo, nome, autor, isbn, categoria, paginas, status) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -244,6 +247,7 @@ class Biblioteca:
                 (str(novo_emp.id), str(item.id), str(membro.id), novo_emp.data_emprestimo, 'ativo', 0)
             )
             conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('emprestado', str(item.id)))
+            item._status = 'emprestado'
             conn.commit()
             conn.close()
             return
@@ -296,6 +300,7 @@ class Biblioteca:
                 (str(novo_emp.id), str(item.id), str(membro.id), novo_emp.data_emprestimo, 'ativo', 0)
             )
             conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('emprestado', str(item.id)))
+            item._status = 'emprestado'
             conn.commit()
             conn.close()
             return
@@ -326,6 +331,7 @@ class Biblioteca:
             (str(novo_emp.id), str(item.id), str(membro.id), novo_emp.data_emprestimo, 'ativo', 0)
         )
         conn.execute("UPDATE itens SET status = ? WHERE id = ?", ('emprestado', str(item.id)))
+        item._status = 'emprestado'
         conn.commit()
         conn.close()
         
@@ -396,6 +402,25 @@ class Biblioteca:
         conn.commit()
         conn.close()
 
+    def cancelar_reserva(self, id_reserva):
+        # Localiza reserva pelo id
+        reservas = [r for r in self.reservas if str(r.id) == str(id_reserva) or r.id == id_reserva]
+        
+        if not reservas:
+            raise ValueError(f'Reserva com id {id_reserva} não encontrada')
+        
+        reserva = reservas[0]
+        
+        # Delega a lógica de cancelamento ao objeto Reserva
+        reserva.cancelar()
+        
+        # Persistência
+        conn = database.get_connection()
+        conn.execute("UPDATE reservas SET status = ?, data_cancelamento = ? WHERE id = ?", 
+                     ('cancelada', reserva.data_cancelamento, str(reserva.id)))
+        conn.commit()
+        conn.close()
+
     def registrar_pagamento_multa(self, id_emprestimo):
         # Localiza empréstimo pelo id
         emprestimos = [e for e in self.emprestimos if str(e.id) == str(id_emprestimo) or e.id == id_emprestimo]
@@ -434,7 +459,10 @@ class Biblioteca:
         else:
             # tentar atribuir atributo 'status' se existir ou ignorar
             try:
-                setattr(item, 'status', 'disponivel')
+                if hasattr(item, '_status'):
+                    item._status = 'disponivel'
+                else:
+                    setattr(item, 'status', 'disponivel')
             except Exception:
                 pass
                 
