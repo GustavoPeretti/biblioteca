@@ -1065,8 +1065,8 @@ class SistemaBiblioteca(tk.Tk):
 
         # Filtrar reservas: se membro, mostrar apenas as do próprio membro
         reservas = self.biblioteca.reservas
-        # Mostrar reservas com status 'aguardando' ou 'finalizada' (manter histórico)
-        reservas = [r for r in reservas if (getattr(r, 'status', None) or r.get('status')) in ('aguardando', 'finalizada')]
+        # Mostrar reservas com status 'aguardando', 'finalizada' ou 'cancelada' (manter histórico)
+        reservas = [r for r in reservas if (getattr(r, 'status', None) or r.get('status')) in ('aguardando', 'finalizada', 'cancelada')]
 
         if self.usuario_logado.tipo == 'membro':
             reservas = [r for r in reservas if getattr(r.membro, 'id', None) == self.usuario_logado.id]
