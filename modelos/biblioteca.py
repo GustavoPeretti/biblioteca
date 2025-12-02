@@ -7,10 +7,8 @@ from modelos.livro import Livro
 from modelos.ebook import Ebook
 from modelos import database
 from config import LIMITE_EMPRESTIMOS_SIMULTANEOS, PRAZO_VALIDADE_RESERVA
+from utils.helpers import get_status
 import datetime
-
-def _get_status(obj):
-    return obj.get('status') if isinstance(obj, dict) else getattr(obj, 'status', None)
 
 class Biblioteca:
     def __init__(self):
@@ -212,16 +210,16 @@ class Biblioteca:
             raise TypeError('Apenas membros podem emprestar itens')
         
         # Verificar se o membro possui multas pendentes
-        multas_pendentes = [e for e in self.emprestimos if _get_status(e) == 'multado' and getattr(e, 'membro', None) == membro and getattr(getattr(e, 'multa', None), 'paga', True) == False]
+        multas_pendentes = [e for e in self.emprestimos if get_status(e) == 'multado' and getattr(e, 'membro', None) == membro and getattr(getattr(e, 'multa', None), 'paga', True) == False]
         if multas_pendentes:
             valor_total = sum(getattr(e.multa, 'valor', 0) for e in multas_pendentes)
             raise ValueError(f'Membro possui multas pendentes no valor de R$ {valor_total:.2f}. Não é possível fazer novos empréstimos até que as multas sejam quitadas.')
         
         # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
-            [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro]
+            [e for e in self.emprestimos if get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro]
             +
-            [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
+            [r for r in self.reservas if get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
         )
 
         # Se ultrapasasar o limite de empréstimos
@@ -229,7 +227,7 @@ class Biblioteca:
             raise ValueError(f'Não é possível ultrapassar o limite de {LIMITE_EMPRESTIMOS_SIMULTANEOS} empréstimos')
 
         # Obtenção dos empréstimos ativos do item
-        emprestimos_ativos_item = [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'item', None) == item]
+        emprestimos_ativos_item = [e for e in self.emprestimos if get_status(e) == 'ativo' and getattr(e, 'item', None) == item]
 
         # Se há um empréstimo ativo do item, ele não pode ser emprestado
         if emprestimos_ativos_item:
@@ -237,7 +235,7 @@ class Biblioteca:
         
         # Obtenção do último empréstimo
         # Pode ser que não tenha nenhum resultado, um, ou múltiplos
-        filtro_ultimo_emprestimo = [e for e in self.emprestimos if _get_status(e) != 'ativo' and getattr(e, 'item', None) == item]
+        filtro_ultimo_emprestimo = [e for e in self.emprestimos if get_status(e) != 'ativo' and getattr(e, 'item', None) == item]
         
         # Se nunca teve empréstimos, nunca teve reserva. Isso significa que temos informações
         # suficientes para saber que o livro pode ser emprestado
@@ -268,7 +266,7 @@ class Biblioteca:
         data_referencia = emprestimo_mais_recente.data_devolucao
 
         # Checar reservas relacionadas para atualizar expiração (inclui 'aguardando' e 'finalizada')
-        reservas_para_validade = [r for r in self.reservas if _get_status(r) in ['aguardando', 'finalizada'] and getattr(r, 'item', None) == item]
+        reservas_para_validade = [r for r in self.reservas if get_status(r) in ['aguardando', 'finalizada'] and getattr(r, 'item', None) == item]
 
         # Atualização do status das reservas expiradas
         for reserva in reservas_para_validade:
@@ -291,7 +289,7 @@ class Biblioteca:
                 conn.close()
 
         # Obtenção das reservas que efetivamente bloqueiam empréstimos: apenas 'aguardando'
-        reservas_ativas_item = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
+        reservas_ativas_item = [r for r in self.reservas if get_status(r) == 'aguardando' and getattr(r, 'item', None) == item]
 
         # Se não há reservas ativas, não há prioridade para verificar
         if not reservas_ativas_item:
@@ -329,7 +327,7 @@ class Biblioteca:
         reserva_utilizada = reservas_ativas_item[0]
         conn = database.get_connection()
         # Atualizar reserva (se já não estiver finalizada)
-        if _get_status(reserva_utilizada) != 'finalizada':
+        if get_status(reserva_utilizada) != 'finalizada':
              conn.execute("UPDATE reservas SET status = ?, data_finalizacao = ? WHERE id = ?", ('finalizada', datetime.datetime.now(), str(reserva_utilizada.id)))
              # Atualiza objeto em memória também, caso não esteja atualizado
              if isinstance(reserva_utilizada, dict):
@@ -373,29 +371,32 @@ class Biblioteca:
 
     def reservar_item(self, item, membro):
         # Itens disponíveis não podem ser reservados
-        emprestimos_ativos_item = [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'item', None) == item]
+        emprestimos_ativos_item = [e for e in self.emprestimos if get_status(e) == 'ativo' and getattr(e, 'item', None) == item]
         if not emprestimos_ativos_item:
             raise ValueError('Item disponível não pode ser reservado')
 
         # Verificar se o usuário já não tem reserva ativa desse item
-        reservas_ativas_membro_item = [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro and getattr(r, 'item', None) == item]
+        reservas_ativas_membro_item = [r for r in self.reservas if get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro and getattr(r, 'item', None) == item]
         
-        if reservas_ativas_membro_item:
-            raise ValueError('Você já possui uma reserva ativa deste item')
+        # Verificar se o usuário já não tem empréstimo ativo desse item
+        emprestimos_ativos_membro_item = [e for e in self.emprestimos if get_status(e) == 'aguardando' and getattr(e, 'membro', None) == membro and getattr(e, 'item', None) == item]
+
+        if reservas_ativas_membro_item or emprestimos_ativos_item:
+            raise ValueError('Você já possui uma reserva ativa ou um empréstimo ativo deste item')
 
         # Se o usuário não for um membro (apenas membros podem emprestar e reservar)
         if not isinstance(membro, Membro):
             raise TypeError('Apenas membros podem reservar itens')
-        
+
         # Verificar se o membro possui multas pendentes
-        multas_pendentes = [e for e in self.emprestimos if _get_status(e) == 'multado' and getattr(e, 'membro', None) == membro and getattr(getattr(e, 'multa', None), 'paga', True) == False]
+        multas_pendentes = [e for e in self.emprestimos if get_status(e) == 'multado' and getattr(e, 'membro', None) == membro and getattr(getattr(e, 'multa', None), 'paga', True) == False]
         if multas_pendentes:
             valor_total = sum(getattr(e.multa, 'valor', 0) for e in multas_pendentes)
             raise ValueError(f'Membro possui multas pendentes no valor de R$ {valor_total:.2f}. Não é possível fazer novas reservas até que as multas sejam quitadas.')
         
         # Soma da contagem de reservas e de empréstimos (que não deve ultrapassar o limite de registros)
         soma_emprestimos_reservas = len(
-            [e for e in self.emprestimos if _get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro] + [r for r in self.reservas if _get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
+            [e for e in self.emprestimos if get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro] + [r for r in self.reservas if get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro]
         )
 
         # Se ultrapasasar o limite de empréstimos

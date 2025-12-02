@@ -21,3 +21,7 @@ def format_isbn(isbn):
     if len(s) == 10:
         return f"{s[:1]}-{s[1:4]}-{s[4:9]}-{s[9]}"
     return str(isbn)
+
+# Método que aplica polimorfismo
+def get_status(obj):
+    return obj.get('status') if isinstance(obj, dict) else getattr(obj, 'status', None)
