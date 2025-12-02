@@ -379,9 +379,9 @@ class Biblioteca:
         reservas_ativas_membro_item = [r for r in self.reservas if get_status(r) == 'aguardando' and getattr(r, 'membro', None) == membro and getattr(r, 'item', None) == item]
         
         # Verificar se o usuário já não tem empréstimo ativo desse item
-        emprestimos_ativos_membro_item = [e for e in self.emprestimos if get_status(e) == 'aguardando' and getattr(e, 'membro', None) == membro and getattr(e, 'item', None) == item]
+        emprestimos_ativos_membro_item = [e for e in self.emprestimos if get_status(e) == 'ativo' and getattr(e, 'membro', None) == membro and getattr(e, 'item', None) == item]
 
-        if reservas_ativas_membro_item or emprestimos_ativos_item:
+        if reservas_ativas_membro_item or emprestimos_ativos_membro_item:
             raise ValueError('Você já possui uma reserva ativa ou um empréstimo ativo deste item')
 
         # Se o usuário não for um membro (apenas membros podem emprestar e reservar)
